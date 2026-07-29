@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "تجربة الإدخال العقاري الذكي",
-  description: "MVP لاستخراج بيانات العقار من النص والصوت العربي.",
+  title: "مفكرة الوسيط",
+  description: "MVP لإدارة العروض والطلبات والعملاء والتذكيرات العقارية.",
 };
 
 export default function RootLayout({
