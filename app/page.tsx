@@ -453,26 +453,9 @@ function fieldClass() {
   return "h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-600/20";
 }
 
-function loadInitialWorkspace() {
-  if (typeof window === "undefined") {
-    return seedState;
-  }
-
-  const saved = window.localStorage.getItem(storageKey);
-  if (!saved) {
-    return seedState;
-  }
-
-  try {
-    return JSON.parse(saved) as WorkspaceState;
-  } catch {
-    window.localStorage.removeItem(storageKey);
-    return seedState;
-  }
-}
-
 export default function Home() {
-  const [workspace, setWorkspace] = useState<WorkspaceState>(loadInitialWorkspace);
+  const [workspace, setWorkspace] = useState<WorkspaceState>(seedState);
+  const [storageReady, setStorageReady] = useState(false);
   const [view, setView] = useState<ViewId>("dashboard");
   const [filters, setFilters] = useState<FilterState>({ query: "", status: "all", city: "all" });
   const [aiText, setAiText] = useState("");
@@ -484,10 +467,29 @@ export default function Home() {
   const [selectedShareId, setSelectedShareId] = useState(seedState.records[0]?.id ?? "");
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    const timer = window.setTimeout(() => {
+      const saved = window.localStorage.getItem(storageKey);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved) as WorkspaceState;
+          setWorkspace(parsed);
+          setSelectedShareId(parsed.records.find((record) => !record.deletedAt)?.id ?? seedState.records[0]?.id ?? "");
+        } catch {
+          window.localStorage.removeItem(storageKey);
+        }
+      }
+
+      setStorageReady(true);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (storageReady) {
       window.localStorage.setItem(storageKey, JSON.stringify(workspace));
     }
-  }, [workspace]);
+  }, [storageReady, workspace]);
 
   const activeRecords = useMemo(() => workspace.records.filter((record) => !record.deletedAt), [workspace.records]);
   const trashedRecords = useMemo(() => workspace.records.filter((record) => record.deletedAt), [workspace.records]);
