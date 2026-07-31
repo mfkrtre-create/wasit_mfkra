@@ -112,6 +112,8 @@ export function RealEstateMap({
 
   useEffect(() => {
     let cancelled = false;
+    let layersReady = false;
+    let loadingTimeout: number | null = null;
 
     async function setupMap() {
       if (!containerRef.current) {
@@ -148,132 +150,162 @@ export function RealEstateMap({
         "top-left",
       );
 
-      map.on("error", () => {
-        setMapError("تعذر تحميل الخريطة أو البلاطات. تحقق من الاتصال ثم أعد المحاولة.");
-      });
-
-      map.on("load", () => {
+      function failMap(message = "تعذر تحميل الخريطة أو البلاطات. تحقق من الاتصال ثم أعد المحاولة.") {
         if (cancelled) {
           return;
         }
+        setMapLoaded(false);
+        setMapError(message);
+      }
 
-        map.addSource(sourceId, {
-          type: "geojson",
-          data: latestFeatureCollectionRef.current,
-          cluster: true,
-          clusterMaxZoom: 14,
-          clusterRadius: 48,
-          promoteId: "id",
-        });
+      function finishMapSetup() {
+        if (cancelled || layersReady || !map.isStyleLoaded()) {
+          return;
+        }
 
-        map.addLayer({
-          id: clusterLayerId,
-          type: "circle",
-          source: sourceId,
-          filter: ["has", "point_count"],
-          paint: {
-            "circle-color": "#0f766e",
-            "circle-radius": ["step", ["get", "point_count"], 18, 5, 24, 15, 32],
-            "circle-stroke-width": 3,
-            "circle-stroke-color": "#ffffff",
-          },
-        });
+        try {
+          layersReady = true;
 
-        map.addLayer({
-          id: clusterCountLayerId,
-          type: "symbol",
-          source: sourceId,
-          filter: ["has", "point_count"],
-          layout: {
-            "text-field": ["get", "point_count_abbreviated"],
-            "text-font": ["Noto Sans Regular"],
-            "text-size": 13,
-          },
-          paint: { "text-color": "#ffffff" },
-        });
+          map.addSource(sourceId, {
+            type: "geojson",
+            data: latestFeatureCollectionRef.current,
+            cluster: true,
+            clusterMaxZoom: 14,
+            clusterRadius: 48,
+            promoteId: "id",
+          });
 
-        map.addLayer({
-          id: pointLayerId,
-          type: "circle",
-          source: sourceId,
-          filter: ["!", ["has", "point_count"]],
-          paint: {
-            "circle-color": ["get", "markerColor"],
-            "circle-radius": 8,
-            "circle-stroke-width": 3,
-            "circle-stroke-color": "#ffffff",
-          },
-        });
+          map.addLayer({
+            id: clusterLayerId,
+            type: "circle",
+            source: sourceId,
+            filter: ["has", "point_count"],
+            paint: {
+              "circle-color": "#0f766e",
+              "circle-radius": ["step", ["get", "point_count"], 18, 5, 24, 15, 32],
+              "circle-stroke-width": 3,
+              "circle-stroke-color": "#ffffff",
+            },
+          });
 
-        map.addLayer({
-          id: selectedLayerId,
-          type: "circle",
-          source: sourceId,
-          filter: ["all", ["!", ["has", "point_count"]], ["==", ["get", "id"], ""]],
-          paint: {
-            "circle-color": "rgba(20,184,166,0.18)",
-            "circle-radius": 22,
-            "circle-stroke-color": "#0f766e",
-            "circle-stroke-width": 2,
-          },
-        });
+          map.addLayer({
+            id: clusterCountLayerId,
+            type: "symbol",
+            source: sourceId,
+            filter: ["has", "point_count"],
+            layout: {
+              "text-field": ["get", "point_count_abbreviated"],
+              "text-size": 13,
+            },
+            paint: { "text-color": "#ffffff" },
+          });
 
-        map.on("click", clusterLayerId, async (event: MapMouseEvent) => {
-          const features = map.queryRenderedFeatures(event.point, { layers: [clusterLayerId] });
-          const cluster = features[0];
-          if (!cluster) {
-            return;
-          }
+          map.addLayer({
+            id: pointLayerId,
+            type: "circle",
+            source: sourceId,
+            filter: ["!", ["has", "point_count"]],
+            paint: {
+              "circle-color": ["get", "markerColor"],
+              "circle-radius": 8,
+              "circle-stroke-width": 3,
+              "circle-stroke-color": "#ffffff",
+            },
+          });
 
-          const clusterId = cluster.properties?.cluster_id as number | undefined;
-          const source = map.getSource(sourceId) as GeoJSONSource;
-          if (clusterId === undefined) {
-            return;
-          }
+          map.addLayer({
+            id: selectedLayerId,
+            type: "circle",
+            source: sourceId,
+            filter: ["all", ["!", ["has", "point_count"]], ["==", ["get", "id"], ""]],
+            paint: {
+              "circle-color": "rgba(20,184,166,0.18)",
+              "circle-radius": 22,
+              "circle-stroke-color": "#0f766e",
+              "circle-stroke-width": 2,
+            },
+          });
 
-          const zoom = await source.getClusterExpansionZoom(clusterId);
-          const coordinates = cluster.geometry.type === "Point" ? cluster.geometry.coordinates : null;
-          if (coordinates) {
-            map.easeTo({ center: coordinates as [number, number], zoom });
-          }
-        });
+          map.on("click", clusterLayerId, async (event: MapMouseEvent) => {
+            const features = map.queryRenderedFeatures(event.point, { layers: [clusterLayerId] });
+            const cluster = features[0];
+            if (!cluster) {
+              return;
+            }
 
-        map.on("click", pointLayerId, (event: MapLayerMouseEvent) => {
-          const feature = event.features?.[0];
-          if (!feature || feature.geometry.type !== "Point") {
-            return;
-          }
+            const clusterId = cluster.properties?.cluster_id as number | undefined;
+            const source = map.getSource(sourceId) as GeoJSONSource;
+            if (clusterId === undefined) {
+              return;
+            }
 
-          const properties = getFeatureProperties(feature);
-          latestOnSelectRef.current(properties.id);
-          popupRef.current?.remove();
-          popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: "320px" })
-            .setLngLat(feature.geometry.coordinates as [number, number])
-            .setDOMContent(buildPopupElement(properties))
-            .addTo(map);
-        });
+            const zoom = await source.getClusterExpansionZoom(clusterId);
+            const coordinates = cluster.geometry.type === "Point" ? cluster.geometry.coordinates : null;
+            if (coordinates) {
+              map.easeTo({ center: coordinates as [number, number], zoom });
+            }
+          });
 
-        map.on("mouseenter", pointLayerId, () => {
-          map.getCanvas().style.cursor = "pointer";
-        });
-        map.on("mouseleave", pointLayerId, () => {
-          map.getCanvas().style.cursor = "";
-        });
-        map.on("mouseenter", clusterLayerId, () => {
-          map.getCanvas().style.cursor = "pointer";
-        });
-        map.on("mouseleave", clusterLayerId, () => {
-          map.getCanvas().style.cursor = "";
-        });
+          map.on("click", pointLayerId, (event: MapLayerMouseEvent) => {
+            const feature = event.features?.[0];
+            if (!feature || feature.geometry.type !== "Point") {
+              return;
+            }
 
-        setMapLoaded(true);
+            const properties = getFeatureProperties(feature);
+            latestOnSelectRef.current(properties.id);
+            popupRef.current?.remove();
+            popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: "320px" })
+              .setLngLat(feature.geometry.coordinates as [number, number])
+              .setDOMContent(buildPopupElement(properties))
+              .addTo(map);
+          });
+
+          map.on("mouseenter", pointLayerId, () => {
+            map.getCanvas().style.cursor = "pointer";
+          });
+          map.on("mouseleave", pointLayerId, () => {
+            map.getCanvas().style.cursor = "";
+          });
+          map.on("mouseenter", clusterLayerId, () => {
+            map.getCanvas().style.cursor = "pointer";
+          });
+          map.on("mouseleave", clusterLayerId, () => {
+            map.getCanvas().style.cursor = "";
+          });
+
+          setMapError(null);
+          setMapLoaded(true);
+        } catch (error) {
+          layersReady = false;
+          failMap(error instanceof Error ? `تعذر تجهيز طبقات الخريطة: ${error.message}` : "تعذر تجهيز طبقات الخريطة.");
+        }
+      }
+
+      map.on("error", (event) => {
+        console.error("MapLibre error", event.error);
+        setMapError("تعذر تحميل الخريطة أو البلاطات. تحقق من الاتصال ثم أعد المحاولة.");
       });
+
+      map.on("load", finishMapSetup);
+      map.on("styledata", finishMapSetup);
+      loadingTimeout = window.setTimeout(() => {
+        if (!layersReady) {
+          finishMapSetup();
+        }
+        if (!layersReady) {
+          failMap("طال تحميل الخريطة. اضغط إعادة المحاولة أو تحقق من وصول المتصفح إلى OpenFreeMap.");
+        }
+      }, 9000);
     }
 
     void setupMap();
 
     return () => {
       cancelled = true;
+      if (loadingTimeout) {
+        window.clearTimeout(loadingTimeout);
+      }
       popupRef.current?.remove();
       popupRef.current = null;
       mapRef.current?.remove();
