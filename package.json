@@ -8,7 +8,7 @@
     "start": "node scripts/migrate.mjs && next start",
     "migrate": "node scripts/migrate.mjs",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit --incremental false",
     "secrets": "secretlint \"**/*.{ts,tsx,js,mjs,json,md,txt,css}\"",
     "test": "vitest run"
   },
