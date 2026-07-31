@@ -28,6 +28,9 @@ import {
   XCircle,
   type LucideIcon,
 } from "lucide-react";
+import { LocationPicker } from "@/components/LocationPicker";
+import { RealEstateMap } from "@/components/RealEstateMap";
+import { filterMapRecords, type MapRecord } from "@/lib/map-records";
 import { type PropertyData } from "@/lib/property-schema";
 
 type ViewId =
@@ -80,8 +83,8 @@ type PropertyRecord = {
   notes: string;
   tags: string[];
   source: "manual" | "ai-text" | "ai-voice";
-  lat: number;
-  lng: number;
+  lat: number | null;
+  lng: number | null;
   createdAt: string;
   updatedAt: string;
   sharedAt: string | null;
@@ -429,8 +432,8 @@ function mapAiToRecord(data: PropertyData, source: "ai-text" | "ai-voice", clien
     notes: data.description ?? "",
     tags: data.missingFields.length > 0 ? ["يحتاج مراجعة"] : ["مدخل AI"],
     source,
-    lat: 24.7136 + (Math.random() - 0.5) * 0.18,
-    lng: 46.6753 + (Math.random() - 0.5) * 0.18,
+    lat: null,
+    lng: null,
     createdAt: nowIso(),
     updatedAt: nowIso(),
     sharedAt: null,
@@ -453,6 +456,10 @@ function fieldClass() {
   return "h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-600/20";
 }
 
+function hasUsableCoordinates(latitude: number, longitude: number) {
+  return Number.isFinite(latitude) && latitude >= -90 && latitude <= 90 && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
+}
+
 export default function Home() {
   const [workspace, setWorkspace] = useState<WorkspaceState>(seedState);
   const [storageReady, setStorageReady] = useState(false);
@@ -465,6 +472,9 @@ export default function Home() {
   const [aiError, setAiError] = useState<string | null>(null);
   const [calculatorPrice, setCalculatorPrice] = useState(1350000);
   const [selectedShareId, setSelectedShareId] = useState(seedState.records[0]?.id ?? "");
+  const [hoveredMapId, setHoveredMapId] = useState<string | null>(null);
+  const [isMobileMapOpen, setIsMobileMapOpen] = useState(false);
+  const [recordFormVersion, setRecordFormVersion] = useState(0);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -500,6 +510,30 @@ export default function Home() {
   const dueReminders = workspace.reminders.filter((reminder) => reminder.status === "due").length;
   const selectedShareRecord = activeRecords.find((record) => record.id === selectedShareId) ?? activeRecords[0] ?? null;
 
+  function toMapRecord(record: PropertyRecord): MapRecord {
+    return {
+      id: record.id,
+      recordType: record.kind,
+      status: record.status,
+      propertyType: record.propertyType,
+      city: record.city,
+      district: record.district,
+      price: record.price,
+      budget: record.budget,
+      area: record.area,
+      latitude: record.lat,
+      longitude: record.lng,
+      detailsUrl: `#record-${record.id}`,
+    };
+  }
+
+  function selectMapRecord(recordId: string) {
+    setSelectedShareId(recordId);
+    window.setTimeout(() => {
+      document.getElementById(`record-${recordId}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 30);
+  }
+
   function updateRecord(recordId: string, patch: Partial<PropertyRecord>) {
     setWorkspace((current) => ({
       ...current,
@@ -531,7 +565,9 @@ export default function Home() {
     const title = String(formData.get("title") ?? "").trim();
     const priceValue = Number(formData.get("price") || 0);
     const areaValue = Number(formData.get("area") || 0);
-    const offsetSeed = workspace.records.length + 1;
+    const latitudeValue = Number(formData.get("latitude") || Number.NaN);
+    const longitudeValue = Number(formData.get("longitude") || Number.NaN);
+    const hasCoordinates = hasUsableCoordinates(latitudeValue, longitudeValue);
     const record: PropertyRecord = {
       id: makeId("rec"),
       kind,
@@ -554,8 +590,8 @@ export default function Home() {
       notes: String(formData.get("notes") || ""),
       tags: kind === "offer" ? ["عرض يدوي"] : ["طلب يدوي"],
       source: "manual",
-      lat: 24.7136 + ((offsetSeed % 7) - 3) * 0.021,
-      lng: 46.6753 + ((offsetSeed % 5) - 2) * 0.027,
+      lat: hasCoordinates ? latitudeValue : null,
+      lng: hasCoordinates ? longitudeValue : null,
       createdAt: nowIso(),
       updatedAt: nowIso(),
       sharedAt: null,
@@ -564,6 +600,7 @@ export default function Home() {
 
     setWorkspace((current) => ({ ...current, records: [record, ...current.records] }));
     setSelectedShareId(record.id);
+    setRecordFormVersion((value) => value + 1);
     addNotification("تم إنشاء سجل", `تم حفظ ${recordKindLabels[kind]}: ${record.title}`, "success");
   }
 
@@ -606,10 +643,10 @@ export default function Home() {
     addNotification("تم إنشاء تذكير", `موعد المتابعة بعد 14 يوماً حسب توقيت ${workspace.profile.timezone}.`, "success");
   }
 
-  function filteredRecords(kind: RecordKind) {
+  function filteredActiveRecords(kind?: RecordKind) {
     const query = filters.query.trim().toLowerCase();
     return activeRecords.filter((record) => {
-      const matchesKind = record.kind === kind;
+      const matchesKind = kind === undefined || record.kind === kind;
       const matchesStatus = filters.status === "all" || record.status === filters.status;
       const matchesCity = filters.city === "all" || record.city === filters.city;
       const matchesQuery =
@@ -620,6 +657,10 @@ export default function Home() {
           .includes(query);
       return matchesKind && matchesStatus && matchesCity && matchesQuery;
     });
+  }
+
+  function filteredRecords(kind: RecordKind) {
+    return filteredActiveRecords(kind);
   }
 
   async function readJsonResponse<T>(response: Response): Promise<T & { error?: string }> {
@@ -837,6 +878,7 @@ export default function Home() {
               ))}
             </select>
             <input name="notes" placeholder="ملاحظات" className={fieldClass()} />
+            <LocationPicker key={`${kind}-${recordFormVersion}`} />
           </div>
           <div className="mt-4 flex justify-end">
             <button type="submit" className="primary-button">
@@ -959,51 +1001,66 @@ export default function Home() {
   }
 
   function renderMap() {
+    const mapListRecords = filteredActiveRecords();
+    const mapRecords = filterMapRecords(mapListRecords.map(toMapRecord), filters);
+    const visibleRecordIds = new Set(mapRecords.map((record) => record.id));
+    const visibleRecords = mapListRecords.filter((record) => visibleRecordIds.has(record.id));
+
     return (
-      <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <div className="relative min-h-[460px] overflow-hidden rounded-lg border border-slate-200 bg-[#eef4f1] shadow-sm">
-          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(15,23,42,0.06)_1px,transparent_1px),linear-gradient(rgba(15,23,42,0.06)_1px,transparent_1px)] bg-[size:44px_44px]" />
-          <div className="absolute right-4 top-4 rounded-md bg-white px-3 py-2 text-sm font-bold text-slate-700 shadow-sm">
-            خريطة تشغيلية أولية - مركز الرياض
-          </div>
-          {activeRecords.map((record, index) => {
-            const right = 16 + ((index * 19) % 68);
-            const top = 18 + ((index * 23) % 58);
-            return (
-              <button
-                key={record.id}
-                type="button"
-                onClick={() => setSelectedShareId(record.id)}
-                className={[
-                  "absolute rounded-full border-4 border-white p-2 text-white shadow-lg transition hover:scale-105",
-                  record.kind === "offer" ? "bg-emerald-600" : "bg-blue-600",
-                  record.status !== "active" ? "opacity-60" : "",
-                ].join(" ")}
-                style={{ right: `${right}%`, top: `${top}%` }}
-                title={record.title}
-              >
-                <MapPinned className="size-5" aria-hidden="true" />
-              </button>
-            );
-          })}
+      <section className="grid gap-4 xl:grid-cols-[0.82fr_1.18fr]">
+        <div className="xl:hidden">
+          <button type="button" onClick={() => setIsMobileMapOpen(true)} className="primary-button w-full justify-center">
+            <MapPinned className="size-4" aria-hidden="true" />
+            عرض الخريطة
+          </button>
         </div>
         <Panel title="سجلات الخريطة">
-          <div className="grid gap-3">
-            {activeRecords.map((record) => (
+          <div className="grid gap-3 xl:max-h-[calc(100vh-10rem)] xl:overflow-auto xl:pl-1">
+            {visibleRecords.length > 0 ? (
+              visibleRecords.map((record) => (
               <button
+                id={`record-${record.id}`}
                 key={record.id}
                 type="button"
-                onClick={() => setSelectedShareId(record.id)}
-                className="rounded-md border border-slate-200 bg-white p-3 text-right transition hover:border-teal-300 hover:bg-teal-50"
+                onClick={() => selectMapRecord(record.id)}
+                onMouseEnter={() => setHoveredMapId(record.id)}
+                onMouseLeave={() => setHoveredMapId(null)}
+                className={[
+                  "rounded-md border bg-white p-3 text-right transition hover:border-teal-300 hover:bg-teal-50",
+                  selectedShareId === record.id ? "border-teal-500 ring-2 ring-teal-500/20" : "border-slate-200",
+                ].join(" ")}
               >
                 <p className="font-black text-slate-950">{record.title}</p>
                 <p className="mt-1 text-sm text-slate-600">
-                  {record.city}، {record.district} | {recordKindLabels[record.kind]}
+                  {record.city}، {record.district} | {recordKindLabels[record.kind]} | {statusLabels[record.status]}
                 </p>
+                <p className="mt-2 text-sm font-bold text-slate-900">{formatMoney(recordAmount(record))}</p>
               </button>
-            ))}
+              ))
+            ) : (
+              <EmptyState label="لا توجد سجلات مطابقة بإحداثيات صالحة." />
+            )}
           </div>
         </Panel>
+        <div
+          className={[
+            "xl:sticky xl:top-24 xl:block xl:h-[calc(100vh-8rem)]",
+            isMobileMapOpen ? "fixed inset-0 z-50 bg-white p-3" : "hidden",
+          ].join(" ")}
+        >
+          {isMobileMapOpen ? (
+            <button type="button" onClick={() => setIsMobileMapOpen(false)} className="secondary-button mb-3 w-full justify-center xl:hidden">
+              العودة إلى القائمة
+            </button>
+          ) : null}
+          <RealEstateMap
+            records={mapRecords}
+            selectedId={selectedShareId}
+            hoveredId={hoveredMapId}
+            onSelect={selectMapRecord}
+            className="h-full"
+          />
+        </div>
       </section>
     );
   }
