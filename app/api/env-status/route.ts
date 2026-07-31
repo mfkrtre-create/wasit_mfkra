@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
+import { isValidHttpUrl, readTrimmedEnv } from "@/lib/env-config";
 
 export const runtime = "nodejs";
 
 function hasEnv(name: string) {
-  return Boolean(process.env[name]?.trim());
+  return Boolean(readTrimmedEnv(name));
 }
 
 export async function GET() {
   return NextResponse.json({
-    supabaseUrl: hasEnv("NEXT_PUBLIC_SUPABASE_URL"),
+    supabaseUrl: isValidHttpUrl(readTrimmedEnv("NEXT_PUBLIC_SUPABASE_URL")),
     supabaseAnonKey: hasEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
     supabaseServiceRoleKey: hasEnv("SUPABASE_SERVICE_ROLE_KEY"),
     databaseUrl: hasEnv("DATABASE_URL"),

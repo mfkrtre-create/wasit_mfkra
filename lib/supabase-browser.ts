@@ -1,16 +1,17 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { hasValidSupabaseBrowserConfig, isValidHttpUrl, readTrimmedEnv } from "@/lib/env-config";
 
 let browserClient: SupabaseClient | null = null;
 
 export function hasSupabaseBrowserConfig() {
-  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim());
+  return hasValidSupabaseBrowserConfig();
 }
 
 export function getSupabaseBrowserClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  const url = readTrimmedEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const anonKey = readTrimmedEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 
-  if (!url || !anonKey) {
+  if (!isValidHttpUrl(url) || !anonKey) {
     return null;
   }
 
