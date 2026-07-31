@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bell,
   Building2,
@@ -32,6 +32,8 @@ import { LocationPicker } from "@/components/LocationPicker";
 import { RealEstateMap } from "@/components/RealEstateMap";
 import { filterMapRecords, type MapRecord } from "@/lib/map-records";
 import { type PropertyData } from "@/lib/property-schema";
+import { getSupabaseBrowserClient, hasSupabaseBrowserConfig } from "@/lib/supabase-browser";
+import { type User } from "@supabase/supabase-js";
 
 type ViewId =
   | "dashboard"
@@ -134,6 +136,7 @@ type FilterState = {
 
 const storageKey = "wasit-mfkra-local-mvp-state-v1";
 const riyadhTimezone = "Asia/Riyadh";
+const hasCloudPersistence = hasSupabaseBrowserConfig();
 
 const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: "dashboard", label: "لوحة التحكم", icon: LayoutDashboard },
@@ -475,6 +478,14 @@ export default function Home() {
   const [hoveredMapId, setHoveredMapId] = useState<string | null>(null);
   const [isMobileMapOpen, setIsMobileMapOpen] = useState(false);
   const [recordFormVersion, setRecordFormVersion] = useState(0);
+  const [authEmail, setAuthEmail] = useState("");
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(!hasCloudPersistence);
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
+  const [cloudStatus, setCloudStatus] = useState<"local" | "checking" | "synced" | "blocked" | "error">(
+    hasCloudPersistence ? "checking" : "local",
+  );
+  const cloudLoadedRef = useRef(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -496,10 +507,123 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      return;
+    }
+
+    let cancelled = false;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (cancelled) {
+        return;
+      }
+      setAuthUser(data.session?.user ?? null);
+      setAuthReady(true);
+      setCloudStatus(data.session?.user ? "checking" : "local");
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthUser(session?.user ?? null);
+      cloudLoadedRef.current = false;
+      setCloudStatus(session?.user ? "checking" : "local");
+    });
+
+    return () => {
+      cancelled = true;
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase || !authUser || !authReady || !storageReady || cloudLoadedRef.current) {
+      return;
+    }
+
+    const activeSupabase = supabase;
+    const activeUser = authUser;
+    let cancelled = false;
+
+    async function loadCloudWorkspace() {
+      setCloudStatus("checking");
+      const email = activeUser.email ?? "";
+      const profilePayload = {
+        id: activeUser.id,
+        email,
+        name: workspace.profile.name,
+        role: "broker",
+        timezone: workspace.profile.timezone || riyadhTimezone,
+        invite_only: true,
+        smtp_ready: workspace.profile.smtpReady,
+      };
+
+      const profileResult = await activeSupabase.from("profiles").upsert(profilePayload, { onConflict: "id" }).select("id").maybeSingle();
+      if (profileResult.error) {
+        if (!cancelled) {
+          setCloudStatus("blocked");
+          setAuthMessage("تم تسجيل الدخول، لكن الحساب غير موجود في الدعوات أو لا يملك صلاحية إنشاء ملف. أضف دعوة لهذا البريد من Supabase.");
+        }
+        return;
+      }
+
+      const { data, error } = await activeSupabase.from("workspace_snapshots").select("state").eq("user_id", activeUser.id).maybeSingle();
+      if (cancelled) {
+        return;
+      }
+
+      if (error) {
+        setCloudStatus("error");
+        setAuthMessage("تعذر تحميل البيانات السحابية. تحقق من RLS والمigrations.");
+        return;
+      }
+
+      if (data?.state && typeof data.state === "object") {
+        const cloudWorkspace = data.state as WorkspaceState;
+        setWorkspace(cloudWorkspace);
+        setSelectedShareId(cloudWorkspace.records.find((record) => !record.deletedAt)?.id ?? seedState.records[0]?.id ?? "");
+      }
+
+      cloudLoadedRef.current = true;
+      setCloudStatus("synced");
+      setAuthMessage("تم الاتصال بقاعدة البيانات وحفظ البيانات سحابياً لهذا الحساب.");
+    }
+
+    void loadCloudWorkspace();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, authUser, storageReady, workspace.profile.name, workspace.profile.smtpReady, workspace.profile.timezone]);
+
+  useEffect(() => {
     if (storageReady) {
       window.localStorage.setItem(storageKey, JSON.stringify(workspace));
     }
   }, [storageReady, workspace]);
+
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase || !authUser || !storageReady || !cloudLoadedRef.current || cloudStatus === "blocked") {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      supabase
+        .from("workspace_snapshots")
+        .upsert({ user_id: authUser.id, state: workspace, version: 1 }, { onConflict: "user_id" })
+        .then(({ error }) => {
+          if (error) {
+            setCloudStatus("error");
+            setAuthMessage("تعذر حفظ آخر تغيير في قاعدة البيانات.");
+            return;
+          }
+          setCloudStatus("synced");
+        });
+    }, 700);
+
+    return () => window.clearTimeout(timer);
+  }, [authUser, cloudStatus, storageReady, workspace]);
 
   const activeRecords = useMemo(() => workspace.records.filter((record) => !record.deletedAt), [workspace.records]);
   const trashedRecords = useMemo(() => workspace.records.filter((record) => record.deletedAt), [workspace.records]);
@@ -558,6 +682,38 @@ export default function Home() {
         ...current.notifications,
       ],
     }));
+  }
+
+  async function sendLoginLink(formData: FormData) {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setAuthMessage("إعدادات Supabase غير متاحة في المتصفح.");
+      return;
+    }
+
+    const email = String(formData.get("email") ?? authEmail).trim().toLowerCase();
+    if (!email) {
+      setAuthMessage("أدخل البريد الإلكتروني أولاً.");
+      return;
+    }
+
+    setAuthEmail(email);
+    setAuthMessage("جاري إرسال رابط الدخول...");
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.origin },
+    });
+
+    setAuthMessage(error ? "تعذر إرسال رابط الدخول. تحقق من إعدادات Auth/SMTP في Supabase." : "تم إرسال رابط الدخول إذا كان البريد مسموحاً.");
+  }
+
+  async function signOut() {
+    const supabase = getSupabaseBrowserClient();
+    await supabase?.auth.signOut();
+    setAuthUser(null);
+    setCloudStatus("local");
+    cloudLoadedRef.current = false;
+    setAuthMessage("تم تسجيل الخروج. البيانات الحالية محفوظة محلياً على هذا الجهاز.");
   }
 
   function addRecord(kind: RecordKind, formData: FormData) {
@@ -1337,11 +1493,48 @@ export default function Home() {
             <Info label="سياسة التسجيل" value={workspace.profile.inviteOnly ? "دعوات فقط" : "قابل للتسجيل العام لاحقاً"} />
           </div>
         </Panel>
+        <Panel title="المصادقة والحفظ السحابي">
+          <div className="grid gap-3">
+            <ReadinessRow ok={hasCloudPersistence} label="متغيرات Supabase العامة متاحة للمتصفح" />
+            <ReadinessRow ok={Boolean(authUser)} label={authUser ? `مسجل دخول: ${authUser.email ?? "مستخدم"}` : "غير مسجل دخول"} />
+            <ReadinessRow ok={cloudStatus === "synced"} label={`حالة قاعدة البيانات: ${cloudStatus}`} />
+            {authUser ? (
+              <button type="button" onClick={signOut} className="secondary-button justify-center">
+                تسجيل الخروج
+              </button>
+            ) : (
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void sendLoginLink(new FormData(event.currentTarget));
+                }}
+                className="grid gap-2"
+              >
+                <input
+                  name="email"
+                  type="email"
+                  value={authEmail}
+                  onChange={(event) => setAuthEmail(event.target.value)}
+                  placeholder="البريد المدعو"
+                  className={fieldClass()}
+                />
+                <button type="submit" className="primary-button justify-center" disabled={!hasCloudPersistence}>
+                  إرسال رابط الدخول
+                </button>
+              </form>
+            )}
+            {authMessage ? <p className="rounded-md bg-slate-100 p-3 text-sm font-bold leading-7 text-slate-700">{authMessage}</p> : null}
+            <p className="text-xs leading-6 text-slate-500">
+              التسجيل في الـ MVP دعوات فقط. إذا لم توجد دعوة للبريد، يسمح Supabase بالتحقق من الهوية لكن التطبيق يمنع إنشاء الملف والحفظ.
+            </p>
+          </div>
+        </Panel>
         <Panel title="جاهزية الإنتاج">
           <ReadinessRow ok label="Git مستقل داخل مجلد المشروع" />
           <ReadinessRow ok label="المفاتيح لا تقرأ من ملفات fallback" />
           <ReadinessRow ok={workspace.profile.inviteOnly} label="MVP دعوات فقط مع قابلية توسيع لاحقة" />
           <ReadinessRow ok={workspace.profile.smtpReady} label="SMTP موثوق قبل الإنتاج" />
+          <ReadinessRow ok={cloudStatus === "synced"} label="الحفظ السحابي عبر Supabase عند تسجيل الدخول" />
           <ReadinessRow ok label="البحث التقليدي والفلاتر قبل AI search" />
           <ReadinessRow ok label="سلة مهملات وحذف ناعم محلياً" />
         </Panel>

@@ -9,13 +9,15 @@ const clusterCountLayerId = "cluster-count";
 const pointLayerId = "unclustered-point";
 const selectedLayerId = "selected-point";
 const openFreeMapStyleUrl = "https://tiles.openfreemap.org/styles/liberty";
+const mapLibreWorkerPath = "/maplibre-gl-csp-worker.js";
 
 type MapLibreModule = typeof import("maplibre-gl");
 type MapInstance = import("maplibre-gl").Map;
 type GeoJSONSource = import("maplibre-gl").GeoJSONSource;
-type MapMouseEvent = import("maplibre-gl").MapMouseEvent;
 type MapLayerMouseEvent = import("maplibre-gl").MapLayerMouseEvent;
+type MapMouseEvent = import("maplibre-gl").MapMouseEvent;
 type MapGeoJSONFeature = import("maplibre-gl").MapGeoJSONFeature;
+type MaplibreEventName = "load" | "styledata" | "sourcedata" | "idle" | "error" | "render" | "style.load";
 
 function formatMoney(value: number | null) {
   if (value === null || !Number.isFinite(value)) {
@@ -78,6 +80,28 @@ function buildPopupElement(properties: MapFeatureProperties) {
   return container;
 }
 
+function hasWebGlSupport() {
+  try {
+    const canvas = document.createElement("canvas");
+    return Boolean(canvas.getContext("webgl2") ?? canvas.getContext("webgl"));
+  } catch {
+    return false;
+  }
+}
+
+function logMapEvent(name: string, event?: unknown) {
+  if (process.env.NODE_ENV !== "development") {
+    return;
+  }
+
+  if (name === "error") {
+    console.error("[wasit-map]", name, event);
+    return;
+  }
+
+  console.debug("[wasit-map]", name, event);
+}
+
 export function RealEstateMap({
   records,
   selectedId,
@@ -98,7 +122,9 @@ export function RealEstateMap({
   const popupRef = useRef<import("maplibre-gl").Popup | null>(null);
   const latestFeatureCollectionRef = useRef(featureCollection);
   const latestOnSelectRef = useRef(onSelect);
-  const [mapLoaded, setMapLoaded] = useState(false);
+  const layersReadyRef = useRef(false);
+  const mapUsableRef = useRef(false);
+  const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
 
@@ -112,16 +138,44 @@ export function RealEstateMap({
 
   useEffect(() => {
     let cancelled = false;
-    let layersReady = false;
     let loadingTimeout: number | null = null;
+    let resizeObserver: ResizeObserver | null = null;
+    const cleanupHandlers: Array<() => void> = [];
+
+    function cleanupMap() {
+      if (loadingTimeout !== null) {
+        window.clearTimeout(loadingTimeout);
+        loadingTimeout = null;
+      }
+
+      for (const cleanup of cleanupHandlers.splice(0)) {
+        cleanup();
+      }
+
+      resizeObserver?.disconnect();
+      resizeObserver = null;
+      popupRef.current?.remove();
+      popupRef.current = null;
+      mapRef.current?.remove();
+      mapRef.current = null;
+      layersReadyRef.current = false;
+      mapUsableRef.current = false;
+    }
 
     async function setupMap() {
       if (!containerRef.current) {
         return;
       }
 
-      setMapLoaded(false);
+      setMapReady(false);
       setMapError(null);
+      layersReadyRef.current = false;
+      mapUsableRef.current = false;
+
+      if (!hasWebGlSupport()) {
+        setMapError("المتصفح أو الجهاز لا يدعم WebGL المطلوب لتشغيل الخريطة التفاعلية.");
+        return;
+      }
 
       const maplibregl = await import("maplibre-gl");
       if (cancelled || !containerRef.current) {
@@ -129,6 +183,9 @@ export function RealEstateMap({
       }
 
       moduleRef.current = maplibregl;
+      maplibregl.setWorkerUrl(new URL(mapLibreWorkerPath, window.location.origin).toString());
+      maplibregl.setWorkerCount(1);
+      maplibregl.prewarm();
       const map = new maplibregl.Map({
         container: containerRef.current,
         style: openFreeMapStyleUrl,
@@ -139,9 +196,7 @@ export function RealEstateMap({
 
       mapRef.current = map;
       map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-left");
-      if (maplibregl.FullscreenControl) {
-        map.addControl(new maplibregl.FullscreenControl(), "top-left");
-      }
+      map.addControl(new maplibregl.FullscreenControl(), "top-left");
       map.addControl(
         new maplibregl.GeolocateControl({
           positionOptions: { enableHighAccuracy: true },
@@ -150,21 +205,64 @@ export function RealEstateMap({
         "top-left",
       );
 
-      function failMap(message = "تعذر تحميل الخريطة أو البلاطات. تحقق من الاتصال ثم أعد المحاولة.") {
-        if (cancelled) {
+      const resizeMap = () => {
+        window.requestAnimationFrame(() => {
+          if (!cancelled && mapRef.current) {
+            mapRef.current.resize();
+          }
+        });
+      };
+
+      resizeObserver = new ResizeObserver(resizeMap);
+      resizeObserver.observe(containerRef.current);
+      window.addEventListener("resize", resizeMap);
+      cleanupHandlers.push(() => window.removeEventListener("resize", resizeMap));
+      resizeMap();
+      window.setTimeout(resizeMap, 150);
+      window.setTimeout(resizeMap, 600);
+
+      const register = (name: MaplibreEventName, handler: (event: unknown) => void) => {
+        map.on(name, handler);
+        cleanupHandlers.push(() => map.off(name, handler));
+      };
+
+      const failMap = (message = "تعذر تحميل الخريطة أو البلاطات. تحقق من الاتصال ثم أعد المحاولة.") => {
+        if (cancelled || mapUsableRef.current) {
           return;
         }
-        setMapLoaded(false);
-        setMapError(message);
-      }
 
-      function finishMapSetup() {
-        if (cancelled || layersReady || !map.isStyleLoaded()) {
+        if (loadingTimeout !== null) {
+          window.clearTimeout(loadingTimeout);
+          loadingTimeout = null;
+        }
+        setMapReady(false);
+        setMapError(message);
+      };
+
+      const markMapUsable = () => {
+        if (cancelled || mapUsableRef.current || !layersReadyRef.current || (!map.loaded() && !map.areTilesLoaded())) {
           return;
+        }
+
+        mapUsableRef.current = true;
+        if (loadingTimeout !== null) {
+          window.clearTimeout(loadingTimeout);
+          loadingTimeout = null;
+        }
+        resizeMap();
+        setMapError(null);
+        setMapReady(true);
+      };
+
+      const addPropertyLayers = () => {
+        if (cancelled || layersReadyRef.current) {
+          return false;
         }
 
         try {
-          layersReady = true;
+          if (!map.getStyle()?.version || map.getSource(sourceId)) {
+            return false;
+          }
 
           map.addSource(sourceId, {
             type: "geojson",
@@ -226,110 +324,159 @@ export function RealEstateMap({
             },
           });
 
-          map.on("click", clusterLayerId, async (event: MapMouseEvent) => {
-            const features = map.queryRenderedFeatures(event.point, { layers: [clusterLayerId] });
-            const cluster = features[0];
-            if (!cluster) {
-              return;
-            }
-
-            const clusterId = cluster.properties?.cluster_id as number | undefined;
-            const source = map.getSource(sourceId) as GeoJSONSource;
-            if (clusterId === undefined) {
-              return;
-            }
-
-            const zoom = await source.getClusterExpansionZoom(clusterId);
-            const coordinates = cluster.geometry.type === "Point" ? cluster.geometry.coordinates : null;
-            if (coordinates) {
-              map.easeTo({ center: coordinates as [number, number], zoom });
-            }
-          });
-
-          map.on("click", pointLayerId, (event: MapLayerMouseEvent) => {
-            const feature = event.features?.[0];
-            if (!feature || feature.geometry.type !== "Point") {
-              return;
-            }
-
-            const properties = getFeatureProperties(feature);
-            latestOnSelectRef.current(properties.id);
-            popupRef.current?.remove();
-            popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: "320px" })
-              .setLngLat(feature.geometry.coordinates as [number, number])
-              .setDOMContent(buildPopupElement(properties))
-              .addTo(map);
-          });
-
-          map.on("mouseenter", pointLayerId, () => {
-            map.getCanvas().style.cursor = "pointer";
-          });
-          map.on("mouseleave", pointLayerId, () => {
-            map.getCanvas().style.cursor = "";
-          });
-          map.on("mouseenter", clusterLayerId, () => {
-            map.getCanvas().style.cursor = "pointer";
-          });
-          map.on("mouseleave", clusterLayerId, () => {
-            map.getCanvas().style.cursor = "";
-          });
-
-          setMapError(null);
-          setMapLoaded(true);
+          layersReadyRef.current = true;
+          return true;
         } catch (error) {
-          layersReady = false;
-          failMap(error instanceof Error ? `تعذر تجهيز طبقات الخريطة: ${error.message}` : "تعذر تجهيز طبقات الخريطة.");
-        }
-      }
+          const message = error instanceof Error ? error.message : "";
+          if (message.includes("Style is not done loading")) {
+            return false;
+          }
 
-      map.on("error", (event) => {
-        console.error("MapLibre error", event.error);
-        setMapError("تعذر تحميل الخريطة أو البلاطات. تحقق من الاتصال ثم أعد المحاولة.");
+          failMap(error instanceof Error ? `تعذر تجهيز طبقات الخريطة: ${error.message}` : "تعذر تجهيز طبقات الخريطة.");
+          return false;
+        }
+      };
+
+      const onClusterClick = async (event: MapMouseEvent) => {
+        const features = map.queryRenderedFeatures(event.point, { layers: [clusterLayerId] });
+        const cluster = features[0];
+        if (!cluster) {
+          return;
+        }
+
+        const clusterId = cluster.properties?.cluster_id as number | undefined;
+        const source = map.getSource(sourceId) as GeoJSONSource;
+        if (clusterId === undefined) {
+          return;
+        }
+
+        const zoom = await source.getClusterExpansionZoom(clusterId);
+        const coordinates = cluster.geometry.type === "Point" ? cluster.geometry.coordinates : null;
+        if (coordinates) {
+          map.easeTo({ center: coordinates as [number, number], zoom });
+        }
+      };
+
+      const onPointClick = (event: MapLayerMouseEvent) => {
+        const feature = event.features?.[0];
+        if (!feature || feature.geometry.type !== "Point") {
+          return;
+        }
+
+        const properties = getFeatureProperties(feature);
+        latestOnSelectRef.current(properties.id);
+        popupRef.current?.remove();
+        popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: "320px" })
+          .setLngLat(feature.geometry.coordinates as [number, number])
+          .setDOMContent(buildPopupElement(properties))
+          .addTo(map);
+      };
+
+      const setPointerCursor = () => {
+        map.getCanvas().style.cursor = "pointer";
+      };
+      const clearPointerCursor = () => {
+        map.getCanvas().style.cursor = "";
+      };
+
+      const bindLayerInteractions = () => {
+        if (!layersReadyRef.current) {
+          return;
+        }
+
+        map.on("click", clusterLayerId, onClusterClick);
+        map.on("click", pointLayerId, onPointClick);
+        map.on("mouseenter", pointLayerId, setPointerCursor);
+        map.on("mouseleave", pointLayerId, clearPointerCursor);
+        map.on("mouseenter", clusterLayerId, setPointerCursor);
+        map.on("mouseleave", clusterLayerId, clearPointerCursor);
+        cleanupHandlers.push(() => {
+          map.off("click", clusterLayerId, onClusterClick);
+          map.off("click", pointLayerId, onPointClick);
+          map.off("mouseenter", pointLayerId, setPointerCursor);
+          map.off("mouseleave", pointLayerId, clearPointerCursor);
+          map.off("mouseenter", clusterLayerId, setPointerCursor);
+          map.off("mouseleave", clusterLayerId, clearPointerCursor);
+        });
+      };
+
+      let interactionsBound = false;
+      const readyAndBind = () => {
+        const added = addPropertyLayers();
+        if (added && !interactionsBound) {
+          interactionsBound = true;
+          bindLayerInteractions();
+        }
+        if (layersReadyRef.current) {
+          markMapUsable();
+        }
+      };
+
+      register("load", (event) => {
+        logMapEvent("load", event);
+        readyAndBind();
+      });
+      register("style.load", (event) => {
+        logMapEvent("style.load", event);
+        const added = addPropertyLayers();
+        if (added && !interactionsBound) {
+          interactionsBound = true;
+          bindLayerInteractions();
+        }
+      });
+      register("styledata", (event) => {
+        logMapEvent("styledata", event);
+      });
+      register("sourcedata", (event) => {
+        logMapEvent("sourcedata", event);
+      });
+      register("render", (event) => {
+        logMapEvent("render", event);
+      });
+      register("idle", (event) => {
+        logMapEvent("idle", event);
+        readyAndBind();
+      });
+      register("error", (event) => {
+        logMapEvent("error", event);
+        setMapError("حدث خطأ أثناء تحميل الخريطة أو إحدى طبقاتها. إذا لم تظهر البلاطات، اضغط إعادة المحاولة.");
       });
 
-      map.on("load", finishMapSetup);
-      map.on("styledata", finishMapSetup);
       loadingTimeout = window.setTimeout(() => {
-        if (!layersReady) {
-          finishMapSetup();
+        readyAndBind();
+        if (!mapUsableRef.current) {
+          failMap("طال تحميل الخريطة. تحقق من اتصال المتصفح بـ OpenFreeMap ثم اضغط إعادة المحاولة.");
         }
-        if (!layersReady) {
-          failMap("طال تحميل الخريطة. اضغط إعادة المحاولة أو تحقق من وصول المتصفح إلى OpenFreeMap.");
-        }
-      }, 9000);
+      }, 12000);
     }
 
     void setupMap();
 
     return () => {
       cancelled = true;
-      if (loadingTimeout) {
-        window.clearTimeout(loadingTimeout);
-      }
-      popupRef.current?.remove();
-      popupRef.current = null;
-      mapRef.current?.remove();
-      mapRef.current = null;
-      setMapLoaded(false);
+      cleanupMap();
+      setMapReady(false);
     };
   }, [retryKey]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!mapLoaded || !map) {
+    if (!mapReady || !map) {
       return;
     }
 
     const source = map.getSource(sourceId) as GeoJSONSource | undefined;
     source?.setData(featureCollection);
-  }, [featureCollection, mapLoaded]);
+  }, [featureCollection, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
     const maplibregl = moduleRef.current;
-    if (!mapLoaded || !map || !maplibregl) {
+    if (!mapReady || !map || !maplibregl) {
       return;
     }
+
+    window.requestAnimationFrame(() => map.resize());
 
     if (featureCollection.features.length === 0) {
       map.easeTo({ center: [riyadhCenter.longitude, riyadhCenter.latitude], zoom: riyadhCenter.zoom });
@@ -346,14 +493,15 @@ export function RealEstateMap({
       bounds.extend(feature.geometry.coordinates);
     }
     map.fitBounds(bounds, { padding: 70, maxZoom: 14, duration: 600 });
-  }, [featureCollection, mapLoaded]);
+  }, [featureCollection, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!mapLoaded || !map || !map.getLayer(pointLayerId)) {
+    if (!mapReady || !map || !map.getLayer(pointLayerId)) {
       return;
     }
 
+    map.resize();
     map.setPaintProperty(pointLayerId, "circle-radius", [
       "case",
       ["==", ["get", "id"], selectedId ?? ""],
@@ -368,11 +516,11 @@ export function RealEstateMap({
     if (selectedFeature) {
       map.flyTo({ center: selectedFeature.geometry.coordinates, zoom: Math.max(map.getZoom(), 12), essential: true });
     }
-  }, [featureCollection, hoveredId, mapLoaded, selectedId]);
+  }, [featureCollection, hoveredId, mapReady, selectedId]);
 
   if (featureCollection.features.length === 0) {
     return (
-      <div className={`flex min-h-[460px] items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white p-6 text-center ${className}`}>
+      <div className={`flex h-[62vh] min-h-[460px] items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white p-6 text-center ${className}`}>
         <div>
           <p className="text-lg font-black text-slate-950">لا توجد سجلات بإحداثيات صالحة</p>
           <p className="mt-2 text-sm text-slate-600">أضف موقعاً للعقار من نموذج العرض أو الطلب حتى يظهر على الخريطة.</p>
@@ -382,17 +530,24 @@ export function RealEstateMap({
   }
 
   return (
-    <div className={`relative min-h-[460px] overflow-hidden rounded-lg border border-slate-200 bg-slate-100 shadow-sm ${className}`}>
-      <div ref={containerRef} className="h-full min-h-[460px] w-full" data-testid="real-maplibre-map" />
-      {!mapLoaded ? (
-        <div className="absolute inset-0 grid place-items-center bg-white/80">
+    <div className={`relative h-[62vh] min-h-[460px] overflow-hidden rounded-lg border border-slate-200 bg-slate-100 shadow-sm ${className}`}>
+      <div ref={containerRef} className="absolute inset-0 h-full w-full" data-testid="real-maplibre-map" />
+      {!mapReady && !mapError ? (
+        <div className="pointer-events-none absolute inset-0 grid place-items-center bg-white/80">
           <p className="rounded-md bg-white px-4 py-3 text-sm font-black text-slate-800 shadow-sm">جاري تحميل الخريطة الحقيقية...</p>
         </div>
       ) : null}
       {mapError ? (
         <div className="absolute inset-x-4 top-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-800 shadow-sm">
           <p>{mapError}</p>
-          <button type="button" onClick={() => setRetryKey((value) => value + 1)} className="secondary-button mt-2">
+          <button
+            type="button"
+            onClick={() => {
+              setMapError(null);
+              setRetryKey((value) => value + 1);
+            }}
+            className="secondary-button mt-2"
+          >
             إعادة المحاولة
           </button>
         </div>
