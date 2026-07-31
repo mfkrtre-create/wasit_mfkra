@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { configureMapLibre } from "@/lib/maplibre-config";
 import { riyadhCenter } from "@/lib/map-records";
 
 type MapLibreModule = typeof import("maplibre-gl");
@@ -68,6 +69,11 @@ export function LocationPicker({
       }
 
       moduleRef.current = maplibregl;
+      await configureMapLibre(maplibregl);
+      if (cancelled || !containerRef.current) {
+        return;
+      }
+
       const map = new maplibregl.Map({
         container: containerRef.current,
         style: openFreeMapStyleUrl,

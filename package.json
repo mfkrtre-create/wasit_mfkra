@@ -7,6 +7,7 @@
     "build": "next build --webpack",
     "start": "node scripts/migrate.mjs && next start",
     "migrate": "node scripts/migrate.mjs",
+    "map:smoke": "node scripts/map-smoke.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit --incremental false",
     "secrets": "secretlint \"**/*.{ts,tsx,js,mjs,json,md,txt,css}\"",
@@ -15,6 +16,7 @@
   "dependencies": {
     "@google/genai": "latest",
     "@hookform/resolvers": "latest",
+    "@mapbox/mapbox-gl-rtl-text": "^0.3.0",
     "@supabase/supabase-js": "^2.111.0",
     "groq-sdk": "latest",
     "lucide-react": "latest",

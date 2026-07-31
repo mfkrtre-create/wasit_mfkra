@@ -11,4 +11,17 @@ describe("map page source", () => {
     expect(pageSource).not.toContain("style={{ right:");
     expect(pageSource).toContain("RealEstateMap");
   });
+
+  it("configures MapLibre with local worker and RTL Arabic text plugin", () => {
+    const configSource = readFileSync(join(process.cwd(), "lib", "maplibre-config.ts"), "utf8");
+    const mapSource = readFileSync(join(process.cwd(), "components", "RealEstateMap.tsx"), "utf8");
+    const pickerSource = readFileSync(join(process.cwd(), "components", "LocationPicker.tsx"), "utf8");
+
+    expect(configSource).toContain("/maplibre-gl-csp-worker.js");
+    expect(configSource).toContain("/mapbox-gl-rtl-text.js");
+    expect(configSource).toContain("setRTLTextPlugin");
+    expect(configSource).toContain("getRTLTextPluginStatus");
+    expect(mapSource).toContain("configureMapLibre");
+    expect(pickerSource).toContain("configureMapLibre");
+  });
 });

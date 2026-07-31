@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { configureMapLibre } from "@/lib/maplibre-config";
 import { buildGoogleMapsUrl, riyadhCenter, toMapFeatureCollection, type MapFeatureProperties, type MapRecord } from "@/lib/map-records";
 
 const sourceId = "property-records";
@@ -9,7 +10,6 @@ const clusterCountLayerId = "cluster-count";
 const pointLayerId = "unclustered-point";
 const selectedLayerId = "selected-point";
 const openFreeMapStyleUrl = "https://tiles.openfreemap.org/styles/liberty";
-const mapLibreWorkerPath = "/maplibre-gl-csp-worker.js";
 
 type MapLibreModule = typeof import("maplibre-gl");
 type MapInstance = import("maplibre-gl").Map;
@@ -183,9 +183,11 @@ export function RealEstateMap({
       }
 
       moduleRef.current = maplibregl;
-      maplibregl.setWorkerUrl(new URL(mapLibreWorkerPath, window.location.origin).toString());
-      maplibregl.setWorkerCount(1);
-      maplibregl.prewarm();
+      await configureMapLibre(maplibregl);
+      if (cancelled || !containerRef.current) {
+        return;
+      }
+
       const map = new maplibregl.Map({
         container: containerRef.current,
         style: openFreeMapStyleUrl,
