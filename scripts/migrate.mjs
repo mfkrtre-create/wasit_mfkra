@@ -5,7 +5,11 @@ import pg from "pg";
 
 const { Client } = pg;
 
-const migrations = ["202607310001_core_mvp.sql", "202608010001_record_status_by_kind.sql"];
+const migrations = [
+  "202607310001_core_mvp.sql",
+  "202608010001_record_status_by_kind.sql",
+  "202608010002_public_registration.sql",
+];
 const databaseUrl = process.env.DATABASE_URL;
 
 if (!databaseUrl) {

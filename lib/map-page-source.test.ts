@@ -53,6 +53,9 @@ describe("map page source", () => {
     expect(pageSource).not.toContain("SMTP جاهز");
     expect(pageSource).not.toContain("متغيرات Supabase");
     expect(pageSource).not.toContain("حالة قاعدة البيانات");
+    expect(pageSource).not.toContain("غير مدعو");
+    expect(pageSource).not.toContain("دعوات فقط");
+    expect(pageSource).toContain("مفتوح لأي مستخدم");
   });
 
   it("protects AI server actions with authenticated requests", () => {
@@ -64,5 +67,15 @@ describe("map page source", () => {
     expect(transcribeSource).toContain("requireAuthenticatedRequest(request)");
     expect(authSource).toContain("supabase.auth.getUser(token)");
     expect(authSource).toContain("سجل الدخول أولاً لاستخدام هذه الخدمة.");
+  });
+
+  it("keeps registration public at the database policy layer", () => {
+    const migrationSource = readFileSync(join(process.cwd(), "supabase", "migrations", "202608010002_public_registration.sql"), "utf8");
+    const migrateScript = readFileSync(join(process.cwd(), "scripts", "migrate.mjs"), "utf8");
+
+    expect(migrationSource).toContain('"authenticated users can create own profile"');
+    expect(migrationSource).toContain("invite_only = false");
+    expect(migrationSource).not.toContain("exists (");
+    expect(migrateScript).toContain("202608010002_public_registration.sql");
   });
 });

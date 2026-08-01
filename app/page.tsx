@@ -229,7 +229,7 @@ const seedState: WorkspaceState = {
     name: "وسيط عقاري",
     role: "broker",
     timezone: riyadhTimezone,
-    inviteOnly: true,
+    inviteOnly: false,
     smtpReady: false,
   },
   clients: [],
@@ -312,6 +312,12 @@ function normalizeRecordStatus(kind: RecordKind, status: string, transaction = "
 function normalizeWorkspaceState(state: WorkspaceState): WorkspaceState {
   return {
     ...state,
+    profile: {
+      ...seedState.profile,
+      ...state.profile,
+      timezone: state.profile?.timezone || riyadhTimezone,
+      inviteOnly: false,
+    },
     records: state.records.map((record) => ({
       ...record,
       status: normalizeRecordStatus(record.kind, String(record.status), record.transaction),
@@ -485,17 +491,35 @@ export default function Home() {
         name: profileName,
         role: "broker",
         timezone: riyadhTimezone,
-        invite_only: true,
+        invite_only: false,
         smtp_ready: false,
       };
 
-      const profileResult = await activeSupabase.from("profiles").upsert(profilePayload, { onConflict: "id" }).select("id").maybeSingle();
+      const profileResult = await activeSupabase
+        .from("profiles")
+        .select("id,name,role,timezone,invite_only,smtp_ready")
+        .eq("id", activeUser.id)
+        .maybeSingle();
+
       if (profileResult.error) {
         if (!cancelled) {
           setCloudStatus("blocked");
-          setAuthMessage("تم تسجيل الدخول، لكن الحساب غير موجود في الدعوات أو لا يملك صلاحية إنشاء ملف. تواصل مع الإدارة لتفعيل البريد.");
+          setAuthMessage("تعذر قراءة ملف الحساب. تواصل مع الإدارة إذا تكرر الخطأ.");
         }
         return;
+      }
+
+      let profile = profileResult.data;
+      if (!profile) {
+        const createdProfile = await activeSupabase.from("profiles").insert(profilePayload).select("id,name,role,timezone,invite_only,smtp_ready").maybeSingle();
+        if (createdProfile.error || !createdProfile.data) {
+          if (!cancelled) {
+            setCloudStatus("blocked");
+            setAuthMessage("تعذر تجهيز حسابك بعد تسجيل الدخول. تواصل مع الإدارة إذا تكرر الخطأ.");
+          }
+          return;
+        }
+        profile = createdProfile.data;
       }
 
       const { data, error } = await activeSupabase.from("workspace_snapshots").select("state").eq("user_id", activeUser.id).maybeSingle();
@@ -511,15 +535,30 @@ export default function Home() {
 
       if (data?.state && typeof data.state === "object") {
         const cloudWorkspace = normalizeWorkspaceState(data.state as WorkspaceState);
-        setWorkspace(cloudWorkspace);
+        setWorkspace({
+          ...cloudWorkspace,
+          profile: {
+            ...cloudWorkspace.profile,
+            id: profile.id,
+            name: profile.name || profileName,
+            role: profile.role === "admin" ? "admin" : "broker",
+            timezone: profile.timezone || riyadhTimezone,
+            inviteOnly: false,
+            smtpReady: Boolean(profile.smtp_ready),
+          },
+        });
         setSelectedShareId(cloudWorkspace.records.find((record) => !record.deletedAt)?.id ?? "");
       } else {
         setWorkspace({
           ...seedState,
           profile: {
             ...seedState.profile,
-            id: activeUser.id,
-            name: profileName,
+            id: profile.id,
+            name: profile.name || profileName,
+            role: profile.role === "admin" ? "admin" : "broker",
+            timezone: profile.timezone || riyadhTimezone,
+            inviteOnly: false,
+            smtpReady: Boolean(profile.smtp_ready),
           },
         });
         setSelectedShareId("");
@@ -693,7 +732,7 @@ export default function Home() {
 
     setAuthMessage(
       error
-        ? "تعذر إنشاء الحساب. تحقق من الدعوة أو قوة كلمة المرور."
+        ? "تعذر إنشاء الحساب. تحقق من البريد أو قوة كلمة المرور."
         : "تم إنشاء الحساب. افتح بريدك واضغط رابط التأكيد، ثم سجّل الدخول.",
     );
   }
@@ -1749,9 +1788,9 @@ export default function Home() {
     return (
       <main className="min-h-screen bg-slate-100 p-4 text-slate-950 lg:p-8">
         <div className="mx-auto max-w-2xl">
-          <Panel title="الحساب غير مفعل">
+          <Panel title="تعذر تجهيز الحساب">
             <div className="grid gap-3">
-              <p className="leading-8 text-slate-700">تم تسجيل الدخول، لكن هذا الحساب غير مدعو أو لا يملك صلاحية استخدام النظام.</p>
+              <p className="leading-8 text-slate-700">تم تسجيل الدخول، لكن لم نستطع تجهيز ملف الحساب أو تحميل بياناته.</p>
               {authMessage ? <p className="rounded-md bg-slate-100 p-3 text-sm font-bold leading-7 text-slate-700">{authMessage}</p> : null}
               <button type="button" onClick={signOut} className="secondary-button justify-center">
                 تسجيل الخروج
@@ -1772,7 +1811,7 @@ export default function Home() {
               <Info label="المستخدم" value={workspace.profile.name} />
               <Info label="الدور" value={workspace.profile.role === "admin" ? "مدير" : "وسيط"} />
               <Info label="المنطقة الزمنية" value={workspace.profile.timezone} />
-              <Info label="سياسة التسجيل" value={workspace.profile.inviteOnly ? "دعوات فقط" : "قابل للتسجيل العام لاحقاً"} />
+              <Info label="سياسة التسجيل" value="مفتوح لأي مستخدم" />
             </div>
           </Panel>
           <Panel title="خصوصية البيانات">
