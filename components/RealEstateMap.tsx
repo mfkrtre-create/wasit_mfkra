@@ -54,7 +54,7 @@ function buildPopupElement(properties: MapFeatureProperties) {
 
   const body = document.createElement("p");
   body.className = "map-popup__body";
-  body.textContent = `${properties.city}، ${properties.district} | ${properties.status} | المساحة: ${
+  body.textContent = `${properties.city}، ${properties.district} | ${properties.statusLabel} | المساحة: ${
     properties.area ? `${properties.area} م²` : "غير محدد"
   } | القيمة: ${formatMoney(properties.price ?? properties.budget)}`;
   container.appendChild(body);

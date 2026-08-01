@@ -1,10 +1,11 @@
 export type MapRecordType = "offer" | "request";
-export type MapRecordStatus = "active" | "reserved" | "closed" | "sold" | "rented" | "fulfilled" | "archived";
+export type MapRecordStatus = "for_sale" | "for_rent" | "sold_or_rented" | "purchase" | "rental" | "fulfilled" | "archived";
 
 export type MapRecord = {
   id: string;
   recordType: MapRecordType;
   status: MapRecordStatus;
+  statusLabel: string;
   propertyType: string;
   city: string;
   district: string;
@@ -21,6 +22,7 @@ export type MapFeatureProperties = {
   id: string;
   recordType: MapRecordType;
   status: MapRecordStatus;
+  statusLabel: string;
   propertyType: string;
   city: string;
   district: string;
@@ -69,7 +71,10 @@ export function hasValidCoordinates(
 }
 
 export function getMarkerColor(record: Pick<MapRecord, "recordType" | "status">) {
-  if (record.status !== "active") {
+  const isOpenOffer = record.recordType === "offer" && (record.status === "for_sale" || record.status === "for_rent");
+  const isOpenRequest = record.recordType === "request" && (record.status === "purchase" || record.status === "rental");
+
+  if (!isOpenOffer && !isOpenRequest) {
     return "#6b7280";
   }
 
@@ -95,6 +100,7 @@ export function toMapFeature(record: MapRecord): MapFeature | null {
       id: record.id,
       recordType: record.recordType,
       status: record.status,
+      statusLabel: record.statusLabel,
       propertyType: record.propertyType,
       city: record.city,
       district: record.district,
@@ -124,7 +130,7 @@ export function filterMapRecords(records: MapRecord[], filters: { query: string;
     const matchesCity = filters.city === "all" || record.city === filters.city;
     const matchesQuery =
       !query ||
-      [record.propertyType, record.city, record.district, record.status, record.recordType].join(" ").toLowerCase().includes(query);
+      [record.propertyType, record.city, record.district, record.status, record.statusLabel, record.recordType].join(" ").toLowerCase().includes(query);
 
     return matchesStatus && matchesCity && matchesQuery;
   });

@@ -50,7 +50,9 @@ type ViewId =
   | "admin";
 
 type RecordKind = "offer" | "request";
-type RecordStatus = "active" | "reserved" | "closed";
+type OfferStatus = "for_sale" | "for_rent" | "sold_or_rented" | "archived";
+type RequestStatus = "purchase" | "rental" | "fulfilled" | "archived";
+type RecordStatus = OfferStatus | RequestStatus;
 type ReminderStatus = "scheduled" | "due" | "completed";
 type NotificationLevel = "info" | "warning" | "success";
 
@@ -159,10 +161,31 @@ const recordKindLabels: Record<RecordKind, string> = {
 };
 
 const statusLabels: Record<RecordStatus, string> = {
-  active: "نشط",
-  reserved: "محجوز",
-  closed: "مغلق",
+  for_sale: "للبيع",
+  for_rent: "للإيجار",
+  sold_or_rented: "مباع/مؤجر",
+  purchase: "شراء",
+  rental: "استئجار",
+  fulfilled: "تمت تلبية الطلب",
+  archived: "مؤرشف",
 };
+
+const statusOptionsByKind: Record<RecordKind, Array<{ value: RecordStatus; label: string }>> = {
+  offer: [
+    { value: "for_sale", label: statusLabels.for_sale },
+    { value: "for_rent", label: statusLabels.for_rent },
+    { value: "sold_or_rented", label: statusLabels.sold_or_rented },
+    { value: "archived", label: statusLabels.archived },
+  ],
+  request: [
+    { value: "purchase", label: statusLabels.purchase },
+    { value: "rental", label: statusLabels.rental },
+    { value: "fulfilled", label: statusLabels.fulfilled },
+    { value: "archived", label: statusLabels.archived },
+  ],
+};
+
+const availableStatuses = new Set<RecordStatus>([...statusOptionsByKind.offer, ...statusOptionsByKind.request].map((option) => option.value));
 
 const clientTypeLabels: Record<ClientRecord["type"], string> = {
   owner: "مالك",
@@ -237,7 +260,7 @@ const seedState: WorkspaceState = {
       title: "أرض سكنية في العارض",
       propertyType: "أرض سكنية",
       transaction: "بيع",
-      status: "active",
+      status: "for_sale",
       city: "الرياض",
       district: "العارض",
       area: 450,
@@ -266,7 +289,7 @@ const seedState: WorkspaceState = {
       title: "طلب فيلا شمال الرياض",
       propertyType: "فيلا",
       transaction: "شراء",
-      status: "active",
+      status: "purchase",
       city: "الرياض",
       district: "الياسمين أو النرجس",
       area: null,
@@ -295,7 +318,7 @@ const seedState: WorkspaceState = {
       title: "شقة للإيجار في الملقا",
       propertyType: "شقة",
       transaction: "إيجار",
-      status: "reserved",
+      status: "for_rent",
       city: "الرياض",
       district: "الملقا",
       area: 135,
@@ -391,10 +414,56 @@ function recordAmount(record: PropertyRecord) {
   return record.kind === "offer" ? record.price : record.budget;
 }
 
+function defaultStatusForRecord(kind: RecordKind, transaction = ""): RecordStatus {
+  const normalizedTransaction = transaction.trim().toLowerCase();
+  const isRent =
+    normalizedTransaction.includes("rent") ||
+    normalizedTransaction.includes("إيجار") ||
+    normalizedTransaction.includes("ايجار") ||
+    normalizedTransaction.includes("استئجار");
+
+  if (kind === "offer") {
+    return isRent ? "for_rent" : "for_sale";
+  }
+
+  return isRent ? "rental" : "purchase";
+}
+
+function normalizeRecordStatus(kind: RecordKind, status: string, transaction = ""): RecordStatus {
+  if (availableStatuses.has(status as RecordStatus)) {
+    return status as RecordStatus;
+  }
+
+  if (status === "active") {
+    return defaultStatusForRecord(kind, transaction);
+  }
+
+  if (status === "reserved") {
+    return kind === "offer" ? "sold_or_rented" : "fulfilled";
+  }
+
+  if (status === "closed") {
+    return "archived";
+  }
+
+  return defaultStatusForRecord(kind, transaction);
+}
+
+function normalizeWorkspaceState(state: WorkspaceState): WorkspaceState {
+  return {
+    ...state,
+    records: state.records.map((record) => ({
+      ...record,
+      status: normalizeRecordStatus(record.kind, String(record.status), record.transaction),
+    })),
+  };
+}
+
 function recordShareText(record: PropertyRecord) {
   const amount = recordAmount(record);
   return [
     `${recordKindLabels[record.kind]}: ${record.title}`,
+    `الحالة: ${statusLabels[record.status]}`,
     `الموقع: ${record.city} - ${record.district}`,
     `النوع: ${record.propertyType} | العملية: ${record.transaction}`,
     amount ? `القيمة: ${formatMoney(amount)}` : null,
@@ -419,7 +488,7 @@ function mapAiToRecord(data: PropertyData, source: "ai-text" | "ai-voice", clien
     title: `${recordKindLabels[kind]} ${propertyType} في ${district}`,
     propertyType,
     transaction,
-    status: "active",
+    status: defaultStatusForRecord(kind, transaction),
     city,
     district,
     area: data.area,
@@ -492,7 +561,7 @@ export default function Home() {
       const saved = window.localStorage.getItem(storageKey);
       if (saved) {
         try {
-          const parsed = JSON.parse(saved) as WorkspaceState;
+          const parsed = normalizeWorkspaceState(JSON.parse(saved) as WorkspaceState);
           setWorkspace(parsed);
           setSelectedShareId(parsed.records.find((record) => !record.deletedAt)?.id ?? seedState.records[0]?.id ?? "");
         } catch {
@@ -579,7 +648,7 @@ export default function Home() {
       }
 
       if (data?.state && typeof data.state === "object") {
-        const cloudWorkspace = data.state as WorkspaceState;
+        const cloudWorkspace = normalizeWorkspaceState(data.state as WorkspaceState);
         setWorkspace(cloudWorkspace);
         setSelectedShareId(cloudWorkspace.records.find((record) => !record.deletedAt)?.id ?? seedState.records[0]?.id ?? "");
       }
@@ -639,6 +708,7 @@ export default function Home() {
       id: record.id,
       recordType: record.kind,
       status: record.status,
+      statusLabel: statusLabels[record.status],
       propertyType: record.propertyType,
       city: record.city,
       district: record.district,
@@ -724,13 +794,14 @@ export default function Home() {
     const latitudeValue = Number(formData.get("latitude") || Number.NaN);
     const longitudeValue = Number(formData.get("longitude") || Number.NaN);
     const hasCoordinates = hasUsableCoordinates(latitudeValue, longitudeValue);
+    const transaction = String(formData.get("transaction") || (kind === "offer" ? "بيع" : "شراء"));
     const record: PropertyRecord = {
       id: makeId("rec"),
       kind,
       title: title || (kind === "offer" ? "عرض جديد" : "طلب جديد"),
       propertyType: String(formData.get("propertyType") || "غير محدد"),
-      transaction: String(formData.get("transaction") || (kind === "offer" ? "بيع" : "شراء")),
-      status: "active",
+      transaction,
+      status: defaultStatusForRecord(kind, transaction),
       city: String(formData.get("city") || "الرياض"),
       district: String(formData.get("district") || "غير محدد"),
       area: areaValue > 0 ? areaValue : null,
@@ -801,9 +872,14 @@ export default function Home() {
 
   function filteredActiveRecords(kind?: RecordKind) {
     const query = filters.query.trim().toLowerCase();
+    const effectiveStatus =
+      kind && filters.status !== "all" && !statusOptionsByKind[kind].some((option) => option.value === filters.status)
+        ? "all"
+        : filters.status;
+
     return activeRecords.filter((record) => {
       const matchesKind = kind === undefined || record.kind === kind;
-      const matchesStatus = filters.status === "all" || record.status === filters.status;
+      const matchesStatus = effectiveStatus === "all" || record.status === effectiveStatus;
       const matchesCity = filters.city === "all" || record.city === filters.city;
       const matchesQuery =
         !query ||
@@ -948,9 +1024,11 @@ export default function Home() {
             onChange={(event) => updateRecord(record.id, { status: event.target.value as RecordStatus })}
             className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm"
           >
-            <option value="active">نشط</option>
-            <option value="reserved">محجوز</option>
-            <option value="closed">مغلق</option>
+            {statusOptionsByKind[record.kind].map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
           <button type="button" onClick={() => updateRecord(record.id, { deletedAt: nowIso() })} className="danger-button">
             <Trash2 className="size-4" aria-hidden="true" />
@@ -963,6 +1041,11 @@ export default function Home() {
 
   function renderRecordWorkspace(kind: RecordKind) {
     const records = filteredRecords(kind);
+    const selectedStatusFilter =
+      filters.status !== "all" && statusOptionsByKind[kind].some((option) => option.value === filters.status)
+        ? filters.status
+        : "all";
+
     return (
       <section className="grid gap-4">
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -978,14 +1061,16 @@ export default function Home() {
               className={fieldClass()}
             />
             <select
-              value={filters.status}
+              value={selectedStatusFilter}
               onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value as FilterState["status"] }))}
               className={fieldClass()}
             >
               <option value="all">كل الحالات</option>
-              <option value="active">نشط</option>
-              <option value="reserved">محجوز</option>
-              <option value="closed">مغلق</option>
+              {statusOptionsByKind[kind].map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
             <select
               value={filters.city}
@@ -1054,8 +1139,8 @@ export default function Home() {
     return (
       <section className="grid gap-4">
         <div className="grid gap-3 md:grid-cols-4">
-          {renderMetric("العروض النشطة", offers.filter((record) => record.status === "active").length, "teal", Building2)}
-          {renderMetric("الطلبات النشطة", requests.filter((record) => record.status === "active").length, "blue", Search)}
+          {renderMetric("العروض المتاحة", offers.filter((record) => record.status === "for_sale" || record.status === "for_rent").length, "teal", Building2)}
+          {renderMetric("الطلبات المفتوحة", requests.filter((record) => record.status === "purchase" || record.status === "rental").length, "blue", Search)}
           {renderMetric("تذكيرات مستحقة", dueReminders, "amber", CalendarClock)}
           {renderMetric("قيمة العروض", formatMoney(totalValue), "slate", CircleDollarSign)}
         </div>
