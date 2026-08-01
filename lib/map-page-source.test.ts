@@ -24,4 +24,18 @@ describe("map page source", () => {
     expect(mapSource).toContain("configureMapLibre");
     expect(pickerSource).toContain("configureMapLibre");
   });
+
+  it("keeps AI and utility tools out of the primary sidebar navigation", () => {
+    const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
+    const navBlock = pageSource.slice(pageSource.indexOf("const navItems"), pageSource.indexOf("const viewTitles"));
+
+    expect(navBlock).not.toContain('id: "ai"');
+    expect(navBlock).not.toContain('id: "calculator"');
+    expect(navBlock).not.toContain('id: "reminders"');
+    expect(navBlock).not.toContain('id: "notifications"');
+    expect(navBlock).not.toContain('id: "sharing"');
+    expect(navBlock).not.toContain('id: "trash"');
+    expect(pageSource).toContain('type ProfileSection = "settings" | "auth" | "reminders" | "notifications" | "sharing" | "trash"');
+    expect(pageSource).toContain("تسجيل صوتي مباشر");
+  });
 });
