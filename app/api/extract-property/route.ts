@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { normalizePropertyData } from "@/lib/normalize-property-data";
 import { propertyJsonSchema } from "@/lib/property-schema";
+import { requireAuthenticatedRequest } from "@/lib/server-auth";
 import { getServerAiKey } from "@/lib/server-ai-keys";
 
 export const runtime = "nodejs";
@@ -110,6 +111,11 @@ async function extractWithGemini(client: GoogleGenAI, text: string) {
 }
 
 export async function POST(request: Request) {
+  const authFailure = await requireAuthenticatedRequest(request);
+  if (authFailure) {
+    return authFailure;
+  }
+
   const apiKey = getServerAiKey("GEMINI_API_KEY");
   if (!apiKey) {
     return errorResponse("مفتاح Gemini غير مضبوط على الخادم.", 500);

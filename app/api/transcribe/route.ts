@@ -1,5 +1,6 @@
 import Groq from "groq-sdk";
 import { NextResponse } from "next/server";
+import { requireAuthenticatedRequest } from "@/lib/server-auth";
 import { getServerAiKey } from "@/lib/server-ai-keys";
 
 export const runtime = "nodejs";
@@ -34,6 +35,11 @@ function isSupportedAudio(file: File) {
 }
 
 export async function POST(request: Request) {
+  const authFailure = await requireAuthenticatedRequest(request);
+  if (authFailure) {
+    return authFailure;
+  }
+
   const apiKey = getServerAiKey("GROQ_API_KEY");
   if (!apiKey) {
     return errorResponse("مفتاح Groq غير مضبوط على الخادم.", 500);

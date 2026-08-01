@@ -38,4 +38,31 @@ describe("map page source", () => {
     expect(pageSource).toContain('type ProfileSection = "settings" | "auth" | "reminders" | "notifications" | "sharing" | "trash"');
     expect(pageSource).toContain("تسجيل صوتي مباشر");
   });
+
+  it("gates the app behind login and keeps production UI free of demo/debug state", () => {
+    const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
+
+    expect(pageSource).toContain("return renderPublicAuthShell()");
+    expect(pageSource).toContain("سجل الدخول أولاً للوصول إلى بياناتك");
+    expect(pageSource).toContain('setWorkspace(seedState)');
+    expect(pageSource).not.toContain("window.localStorage");
+    expect(pageSource).not.toContain("wasit-mfkra-local-mvp-state");
+    expect(pageSource).not.toContain("أبو خالد");
+    expect(pageSource).not.toContain("شركة نجد");
+    expect(pageSource).not.toContain("سارة العتيبي");
+    expect(pageSource).not.toContain("SMTP جاهز");
+    expect(pageSource).not.toContain("متغيرات Supabase");
+    expect(pageSource).not.toContain("حالة قاعدة البيانات");
+  });
+
+  it("protects AI server actions with authenticated requests", () => {
+    const extractSource = readFileSync(join(process.cwd(), "app", "api", "extract-property", "route.ts"), "utf8");
+    const transcribeSource = readFileSync(join(process.cwd(), "app", "api", "transcribe", "route.ts"), "utf8");
+    const authSource = readFileSync(join(process.cwd(), "lib", "server-auth.ts"), "utf8");
+
+    expect(extractSource).toContain("requireAuthenticatedRequest(request)");
+    expect(transcribeSource).toContain("requireAuthenticatedRequest(request)");
+    expect(authSource).toContain("supabase.auth.getUser(token)");
+    expect(authSource).toContain("سجل الدخول أولاً لاستخدام هذه الخدمة.");
+  });
 });

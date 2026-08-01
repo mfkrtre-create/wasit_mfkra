@@ -9,7 +9,7 @@
     "migrate": "node scripts/migrate.mjs",
     "map:smoke": "node scripts/map-smoke.mjs",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit --incremental false",
+    "typecheck": "next typegen && tsc --noEmit --incremental false",
     "secrets": "secretlint \"**/*.{ts,tsx,js,mjs,json,md,txt,css}\"",
     "test": "vitest run"
   },

@@ -132,7 +132,6 @@ type FilterState = {
   city: string;
 };
 
-const storageKey = "wasit-mfkra-local-mvp-state-v1";
 const riyadhTimezone = "Asia/Riyadh";
 const hasCloudPersistence = hasSupabaseBrowserConfig();
 
@@ -227,164 +226,16 @@ const transactionLabels: Record<string, string> = {
 const seedState: WorkspaceState = {
   profile: {
     id: "profile-1",
-    name: "وسيط مفكرة",
-    role: "admin",
+    name: "وسيط عقاري",
+    role: "broker",
     timezone: riyadhTimezone,
     inviteOnly: true,
     smtpReady: false,
   },
-  clients: [
-    {
-      id: "client-1",
-      name: "أبو خالد",
-      phone: "966501234567",
-      type: "owner",
-      priority: "high",
-      notes: "يفضل التواصل واتساب قبل الاتصال.",
-      lastContactAt: "2026-07-28T08:30:00.000Z",
-    },
-    {
-      id: "client-2",
-      name: "شركة نجد للاستثمار",
-      phone: "966551112233",
-      type: "buyer",
-      priority: "medium",
-      notes: "تبحث عن فرص شمال الرياض.",
-      lastContactAt: "2026-07-27T11:00:00.000Z",
-    },
-    {
-      id: "client-3",
-      name: "سارة العتيبي",
-      phone: "966566667777",
-      type: "tenant",
-      priority: "medium",
-      notes: "طلب إيجار شقة بثلاث غرف.",
-      lastContactAt: "2026-07-26T15:20:00.000Z",
-    },
-  ],
-  records: [
-    {
-      id: "rec-1",
-      kind: "offer",
-      title: "أرض سكنية في العارض",
-      propertyType: "أرض سكنية",
-      transaction: "بيع",
-      status: "for_sale",
-      city: "الرياض",
-      district: "العارض",
-      area: 450,
-      price: 1350000,
-      budget: null,
-      streetWidth: 20,
-      facade: "شمالية",
-      bedrooms: null,
-      bathrooms: null,
-      clientId: "client-1",
-      contact: "966501234567",
-      license: "123456",
-      notes: "صافي، مناسب للسكن الخاص.",
-      tags: ["صافي", "شمال الرياض"],
-      source: "ai-text",
-      lat: 24.857,
-      lng: 46.621,
-      createdAt: "2026-07-27T10:00:00.000Z",
-      updatedAt: "2026-07-28T09:00:00.000Z",
-      sharedAt: null,
-      deletedAt: null,
-    },
-    {
-      id: "rec-2",
-      kind: "request",
-      title: "طلب فيلا شمال الرياض",
-      propertyType: "فيلا",
-      transaction: "شراء",
-      status: "purchase",
-      city: "الرياض",
-      district: "الياسمين أو النرجس",
-      area: null,
-      price: null,
-      budget: 2200000,
-      streetWidth: null,
-      facade: "",
-      bedrooms: 4,
-      bathrooms: null,
-      clientId: "client-2",
-      contact: "966551112233",
-      license: "",
-      notes: "الأولوية للمواقع القريبة من الخدمات.",
-      tags: ["طلب مشتري", "ميزانية محددة"],
-      source: "ai-voice",
-      lat: 24.835,
-      lng: 46.668,
-      createdAt: "2026-07-28T08:00:00.000Z",
-      updatedAt: "2026-07-28T08:15:00.000Z",
-      sharedAt: "2026-07-28T12:10:00.000Z",
-      deletedAt: null,
-    },
-    {
-      id: "rec-3",
-      kind: "offer",
-      title: "شقة للإيجار في الملقا",
-      propertyType: "شقة",
-      transaction: "إيجار",
-      status: "for_rent",
-      city: "الرياض",
-      district: "الملقا",
-      area: 135,
-      price: 85000,
-      budget: null,
-      streetWidth: 18,
-      facade: "غربية",
-      bedrooms: 3,
-      bathrooms: 3,
-      clientId: "client-3",
-      contact: "966566667777",
-      license: "987654",
-      notes: "سنوي، موقف خاص، قريبة من طريق أنس.",
-      tags: ["إيجار", "شقة"],
-      source: "manual",
-      lat: 24.804,
-      lng: 46.598,
-      createdAt: "2026-07-25T12:00:00.000Z",
-      updatedAt: "2026-07-28T07:30:00.000Z",
-      sharedAt: null,
-      deletedAt: null,
-    },
-  ],
-  reminders: [
-    {
-      id: "rem-1",
-      recordId: "rec-1",
-      title: "متابعة المالك لتحديث السعر",
-      dueAt: "2026-07-30T07:00:00.000Z",
-      status: "scheduled",
-    },
-    {
-      id: "rem-2",
-      recordId: "rec-2",
-      title: "إرسال خيارات فيلا لشركة نجد",
-      dueAt: "2026-07-29T09:00:00.000Z",
-      status: "due",
-    },
-  ],
-  notifications: [
-    {
-      id: "note-1",
-      title: "تذكير مستحق",
-      body: "إرسال خيارات فيلا لشركة نجد مستحق اليوم.",
-      level: "warning",
-      createdAt: "2026-07-29T06:00:00.000Z",
-      read: false,
-    },
-    {
-      id: "note-2",
-      title: "تم حفظ مشاركة",
-      body: "تم تجهيز نص واتساب لطلب فيلا شمال الرياض.",
-      level: "success",
-      createdAt: "2026-07-28T12:10:00.000Z",
-      read: true,
-    },
-  ],
+  clients: [],
+  records: [],
+  reminders: [],
+  notifications: [],
 };
 
 function nowIso() {
@@ -543,7 +394,6 @@ function hasUsableCoordinates(latitude: number, longitude: number) {
 
 export default function Home() {
   const [workspace, setWorkspace] = useState<WorkspaceState>(seedState);
-  const [storageReady, setStorageReady] = useState(false);
   const [view, setView] = useState<ViewId>("dashboard");
   const [filters, setFilters] = useState<FilterState>({ query: "", status: "all", city: "all" });
   const [aiText, setAiText] = useState("");
@@ -556,7 +406,7 @@ export default function Home() {
   const audioChunksRef = useRef<Blob[]>([]);
   const [expandedCalculatorRecordId, setExpandedCalculatorRecordId] = useState<string | null>(null);
   const [profileSection, setProfileSection] = useState<ProfileSection>("settings");
-  const [selectedShareId, setSelectedShareId] = useState(seedState.records[0]?.id ?? "");
+  const [selectedShareId, setSelectedShareId] = useState("");
   const [hoveredMapId, setHoveredMapId] = useState<string | null>(null);
   const [isMobileMapOpen, setIsMobileMapOpen] = useState(false);
   const [recordFormVersion, setRecordFormVersion] = useState(0);
@@ -571,25 +421,6 @@ export default function Home() {
     hasCloudPersistence ? "checking" : "local",
   );
   const cloudLoadedRef = useRef(false);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const saved = window.localStorage.getItem(storageKey);
-      if (saved) {
-        try {
-          const parsed = normalizeWorkspaceState(JSON.parse(saved) as WorkspaceState);
-          setWorkspace(parsed);
-          setSelectedShareId(parsed.records.find((record) => !record.deletedAt)?.id ?? seedState.records[0]?.id ?? "");
-        } catch {
-          window.localStorage.removeItem(storageKey);
-        }
-      }
-
-      setStorageReady(true);
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, []);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -610,6 +441,10 @@ export default function Home() {
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setAuthUser(session?.user ?? null);
+      setWorkspace(seedState);
+      setSelectedShareId("");
+      setView("dashboard");
+      setProfileSection("settings");
       cloudLoadedRef.current = false;
       setCloudStatus(session?.user ? "checking" : "local");
     });
@@ -632,7 +467,7 @@ export default function Home() {
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
-    if (!supabase || !authUser || !authReady || !storageReady || cloudLoadedRef.current) {
+    if (!supabase || !authUser || !authReady || cloudLoadedRef.current) {
       return;
     }
 
@@ -643,21 +478,22 @@ export default function Home() {
     async function loadCloudWorkspace() {
       setCloudStatus("checking");
       const email = activeUser.email ?? "";
+      const profileName = String(activeUser.user_metadata?.name || email || "وسيط عقاري");
       const profilePayload = {
         id: activeUser.id,
         email,
-        name: workspace.profile.name,
+        name: profileName,
         role: "broker",
-        timezone: workspace.profile.timezone || riyadhTimezone,
+        timezone: riyadhTimezone,
         invite_only: true,
-        smtp_ready: workspace.profile.smtpReady,
+        smtp_ready: false,
       };
 
       const profileResult = await activeSupabase.from("profiles").upsert(profilePayload, { onConflict: "id" }).select("id").maybeSingle();
       if (profileResult.error) {
         if (!cancelled) {
           setCloudStatus("blocked");
-          setAuthMessage("تم تسجيل الدخول، لكن الحساب غير موجود في الدعوات أو لا يملك صلاحية إنشاء ملف. أضف دعوة لهذا البريد من Supabase.");
+          setAuthMessage("تم تسجيل الدخول، لكن الحساب غير موجود في الدعوات أو لا يملك صلاحية إنشاء ملف. تواصل مع الإدارة لتفعيل البريد.");
         }
         return;
       }
@@ -669,14 +505,24 @@ export default function Home() {
 
       if (error) {
         setCloudStatus("error");
-        setAuthMessage("تعذر تحميل البيانات السحابية. تحقق من RLS والمigrations.");
+        setAuthMessage("تعذر تحميل بيانات الحساب. تواصل مع الإدارة إذا تكرر الخطأ.");
         return;
       }
 
       if (data?.state && typeof data.state === "object") {
         const cloudWorkspace = normalizeWorkspaceState(data.state as WorkspaceState);
         setWorkspace(cloudWorkspace);
-        setSelectedShareId(cloudWorkspace.records.find((record) => !record.deletedAt)?.id ?? seedState.records[0]?.id ?? "");
+        setSelectedShareId(cloudWorkspace.records.find((record) => !record.deletedAt)?.id ?? "");
+      } else {
+        setWorkspace({
+          ...seedState,
+          profile: {
+            ...seedState.profile,
+            id: activeUser.id,
+            name: profileName,
+          },
+        });
+        setSelectedShareId("");
       }
 
       cloudLoadedRef.current = true;
@@ -689,17 +535,11 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [authReady, authUser, storageReady, workspace.profile.name, workspace.profile.smtpReady, workspace.profile.timezone]);
-
-  useEffect(() => {
-    if (storageReady) {
-      window.localStorage.setItem(storageKey, JSON.stringify(workspace));
-    }
-  }, [storageReady, workspace]);
+  }, [authReady, authUser]);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
-    if (!supabase || !authUser || !storageReady || !cloudLoadedRef.current || cloudStatus === "blocked") {
+    if (!supabase || !authUser || !cloudLoadedRef.current || cloudStatus === "blocked") {
       return;
     }
 
@@ -718,7 +558,7 @@ export default function Home() {
     }, 700);
 
     return () => window.clearTimeout(timer);
-  }, [authUser, cloudStatus, storageReady, workspace]);
+  }, [authUser, cloudStatus, workspace]);
 
   const activeRecords = useMemo(() => workspace.records.filter((record) => !record.deletedAt), [workspace.records]);
   const trashedRecords = useMemo(() => workspace.records.filter((record) => record.deletedAt), [workspace.records]);
@@ -754,7 +594,22 @@ export default function Home() {
     }, 30);
   }
 
+  function requireAuthenticatedAction() {
+    if (authUser && cloudStatus !== "blocked") {
+      return true;
+    }
+
+    setView("admin");
+    setProfileSection("auth");
+    setAuthMessage("سجل الدخول أولاً للوصول إلى بياناتك وتنفيذ هذا الإجراء.");
+    return false;
+  }
+
   function updateRecord(recordId: string, patch: Partial<PropertyRecord>) {
+    if (!requireAuthenticatedAction()) {
+      return;
+    }
+
     setWorkspace((current) => ({
       ...current,
       records: current.records.map((record) =>
@@ -764,6 +619,10 @@ export default function Home() {
   }
 
   function addNotification(title: string, body: string, level: NotificationLevel = "info") {
+    if (!authUser || cloudStatus === "blocked") {
+      return;
+    }
+
     setWorkspace((current) => ({
       ...current,
       notifications: [
@@ -783,7 +642,7 @@ export default function Home() {
   async function sendLoginLink(formData: FormData) {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
-      setAuthMessage("إعدادات Supabase غير متاحة في المتصفح.");
+      setAuthMessage("خدمة الدخول غير مهيأة على هذا النطاق.");
       return;
     }
 
@@ -800,13 +659,13 @@ export default function Home() {
       options: { emailRedirectTo: window.location.origin },
     });
 
-    setAuthMessage(error ? "تعذر إرسال رابط الدخول. تحقق من إعدادات Auth/SMTP في Supabase." : "تم إرسال رابط الدخول إذا كان البريد مسموحاً.");
+    setAuthMessage(error ? "تعذر إرسال رابط الدخول. تحقق من إعدادات البريد في لوحة الخدمة." : "تم إرسال رابط الدخول إذا كان البريد مسموحاً.");
   }
 
   async function registerWithEmail(formData: FormData) {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
-      setAuthMessage("إعدادات Supabase غير متاحة في المتصفح.");
+      setAuthMessage("خدمة الدخول غير مهيأة على هذا النطاق.");
       return;
     }
 
@@ -834,7 +693,7 @@ export default function Home() {
 
     setAuthMessage(
       error
-        ? "تعذر إنشاء الحساب. تحقق من إعدادات Auth أو الدعوة أو قوة كلمة المرور."
+        ? "تعذر إنشاء الحساب. تحقق من الدعوة أو قوة كلمة المرور."
         : "تم إنشاء الحساب. افتح بريدك واضغط رابط التأكيد، ثم سجّل الدخول.",
     );
   }
@@ -842,7 +701,7 @@ export default function Home() {
   async function signInWithEmail(formData: FormData) {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
-      setAuthMessage("إعدادات Supabase غير متاحة في المتصفح.");
+      setAuthMessage("خدمة الدخول غير مهيأة على هذا النطاق.");
       return;
     }
 
@@ -864,12 +723,18 @@ export default function Home() {
     const supabase = getSupabaseBrowserClient();
     await supabase?.auth.signOut();
     setAuthUser(null);
+    setWorkspace(seedState);
+    setSelectedShareId("");
     setCloudStatus("local");
     cloudLoadedRef.current = false;
-    setAuthMessage("تم تسجيل الخروج. البيانات الحالية محفوظة محلياً على هذا الجهاز.");
+    setAuthMessage("تم تسجيل الخروج.");
   }
 
   function addRecord(kind: RecordKind, formData: FormData) {
+    if (!requireAuthenticatedAction()) {
+      return;
+    }
+
     const clientId = String(formData.get("clientId") ?? workspace.clients[0]?.id ?? "");
     const title = String(formData.get("title") ?? "").trim();
     const priceValue = Number(formData.get("price") || 0);
@@ -915,6 +780,10 @@ export default function Home() {
   }
 
   function addClient(formData: FormData) {
+    if (!requireAuthenticatedAction()) {
+      return;
+    }
+
     const client: ClientRecord = {
       id: makeId("client"),
       name: String(formData.get("name") || "عميل جديد"),
@@ -930,6 +799,10 @@ export default function Home() {
   }
 
   function addReminder(recordId: string) {
+    if (!requireAuthenticatedAction()) {
+      return;
+    }
+
     const record = activeRecords.find((item) => item.id === recordId);
     if (!record) {
       return;
@@ -986,7 +859,21 @@ export default function Home() {
     }
   }
 
+  async function getAuthAccessToken() {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      return null;
+    }
+
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token ?? null;
+  }
+
   async function analyzeText(value = aiText) {
+    if (!requireAuthenticatedAction()) {
+      return;
+    }
+
     const cleanText = value.trim();
     if (!cleanText) {
       setAiError("أدخل نصاً عقارياً أولاً.");
@@ -996,9 +883,14 @@ export default function Home() {
     setAiBusy(true);
     setAiError(null);
     try {
+      const token = await getAuthAccessToken();
+      if (!token) {
+        throw new Error("سجل الدخول أولاً لاستخدام الإدخال الذكي.");
+      }
+
       const response = await fetch("/api/extract-property", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ text: cleanText }),
       });
       const body = await readJsonResponse<PropertyData>(response);
@@ -1015,12 +907,21 @@ export default function Home() {
   }
 
   async function transcribeAudio(audio: Blob, filename = "recording.webm") {
+    if (!requireAuthenticatedAction()) {
+      return;
+    }
+
     setAiBusy(true);
     setAiError(null);
     try {
+      const token = await getAuthAccessToken();
+      if (!token) {
+        throw new Error("سجل الدخول أولاً لاستخدام التسجيل الصوتي.");
+      }
+
       const formData = new FormData();
       formData.append("audio", audio, filename);
-      const response = await fetch("/api/transcribe", { method: "POST", body: formData });
+      const response = await fetch("/api/transcribe", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: formData });
       const body = await readJsonResponse<{ text: string }>(response);
       if (!response.ok) {
         throw new Error(body.error ?? "فشل تحويل الصوت إلى نص.");
@@ -1081,6 +982,10 @@ export default function Home() {
   }
 
   function saveAiRecord() {
+    if (!requireAuthenticatedAction()) {
+      return;
+    }
+
     if (!aiResult) {
       return;
     }
@@ -1093,6 +998,10 @@ export default function Home() {
   }
 
   function markShared(recordId: string) {
+    if (!requireAuthenticatedAction()) {
+      return;
+    }
+
     const record = activeRecords.find((item) => item.id === recordId);
     updateRecord(recordId, { sharedAt: nowIso() });
     addNotification("تم تجهيز مشاركة", record ? `تم تسجيل مشاركة ${record.title}.` : "تم تسجيل المشاركة.", "success");
@@ -1327,19 +1236,30 @@ export default function Home() {
             <div className="grid gap-3">{activeRecords.slice(0, 4).map(renderRecordCard)}</div>
           </div>
           <div className="grid content-start gap-4">
-            <Panel title="الجاهزية">
-              <ReadinessRow ok label="المشروع داخل Git مستقل" />
-              <ReadinessRow ok label="المفاتيح من env فقط" />
-              <ReadinessRow ok={workspace.profile.inviteOnly} label="المصادقة بالدعوات للـ MVP" />
-              <ReadinessRow ok={workspace.profile.smtpReady} label="SMTP جاهز للإنتاج" />
-            </Panel>
             <Panel title="تنبيهات اليوم">
-              {workspace.notifications.slice(0, 4).map((item) => (
-                <div key={item.id} className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                  <p className="font-bold text-slate-950">{item.title}</p>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">{item.body}</p>
-                </div>
-              ))}
+              {workspace.notifications.length > 0 ? (
+                workspace.notifications.slice(0, 4).map((item) => (
+                  <div key={item.id} className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <p className="font-bold text-slate-950">{item.title}</p>
+                    <p className="mt-1 text-sm leading-6 text-slate-600">{item.body}</p>
+                  </div>
+                ))
+              ) : (
+                <EmptyState label="لا توجد إشعارات حالياً." />
+              )}
+            </Panel>
+            <Panel title="اختصارات">
+              <div className="grid gap-2">
+                <button type="button" onClick={() => setView("offers")} className="secondary-button justify-center">
+                  إضافة أو متابعة عرض
+                </button>
+                <button type="button" onClick={() => setView("requests")} className="secondary-button justify-center">
+                  إضافة أو متابعة طلب
+                </button>
+                <button type="button" onClick={() => setView("map")} className="secondary-button justify-center">
+                  فتح الخريطة
+                </button>
+              </div>
             </Panel>
           </div>
         </div>
@@ -1702,95 +1622,148 @@ export default function Home() {
     );
   }
 
-  function renderAdmin() {
-    function renderAuthControls() {
-      return (
-        <Panel title="الدخول والتسجيل وتأكيد البريد">
-          <div className="grid gap-3">
-            <ReadinessRow ok={hasCloudPersistence} label="متغيرات Supabase العامة متاحة للمتصفح" />
-            <ReadinessRow ok={Boolean(authUser)} label={authUser ? `مسجل دخول: ${authUser.email ?? "مستخدم"}` : "غير مسجل دخول"} />
-            <ReadinessRow ok={cloudStatus === "synced"} label={`حالة قاعدة البيانات: ${cloudStatus}`} />
-            {authUser ? (
+  function renderAuthControls() {
+    return (
+      <Panel title="الدخول والتسجيل وتأكيد البريد">
+        <div className="grid gap-3">
+          {authUser ? (
+            <div className="grid gap-3">
+              <Info label="الحساب الحالي" value={authUser.email ?? "مستخدم"} />
               <button type="button" onClick={signOut} className="secondary-button justify-center">
                 تسجيل الخروج
               </button>
-            ) : (
-              <>
-                <div className="grid grid-cols-3 gap-2 rounded-lg bg-slate-100 p-1 text-sm font-bold">
-                  {[
-                    { id: "login", label: "دخول" },
-                    { id: "register", label: "تسجيل" },
-                    { id: "magic", label: "رابط سريع" },
-                  ].map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setAuthMode(item.id as typeof authMode)}
-                      className={[
-                        "rounded-md px-3 py-2 transition",
-                        authMode === item.id ? "bg-white text-teal-800 shadow-sm" : "text-slate-600 hover:bg-white/70",
-                      ].join(" ")}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    const formData = new FormData(event.currentTarget);
-                    if (authMode === "register") {
-                      void registerWithEmail(formData);
-                    } else if (authMode === "login") {
-                      void signInWithEmail(formData);
-                    } else {
-                      void sendLoginLink(formData);
-                    }
-                  }}
-                  className="grid gap-2"
-                >
-                  {authMode === "register" ? (
-                    <input
-                      name="name"
-                      value={authName}
-                      onChange={(event) => setAuthName(event.target.value)}
-                      placeholder="اسم الوسيط"
-                      className={fieldClass()}
-                    />
-                  ) : null}
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-2 rounded-lg bg-slate-100 p-1 text-sm font-bold">
+                {[
+                  { id: "login", label: "دخول" },
+                  { id: "register", label: "تسجيل" },
+                  { id: "magic", label: "رابط سريع" },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setAuthMode(item.id as typeof authMode)}
+                    className={[
+                      "rounded-md px-3 py-2 transition",
+                      authMode === item.id ? "bg-white text-teal-800 shadow-sm" : "text-slate-600 hover:bg-white/70",
+                    ].join(" ")}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const formData = new FormData(event.currentTarget);
+                  if (authMode === "register") {
+                    void registerWithEmail(formData);
+                  } else if (authMode === "login") {
+                    void signInWithEmail(formData);
+                  } else {
+                    void sendLoginLink(formData);
+                  }
+                }}
+                className="grid gap-2"
+              >
+                {authMode === "register" ? (
                   <input
-                    name="email"
-                    type="email"
-                    value={authEmail}
-                    onChange={(event) => setAuthEmail(event.target.value)}
-                    placeholder="البريد الإلكتروني"
+                    name="name"
+                    value={authName}
+                    onChange={(event) => setAuthName(event.target.value)}
+                    placeholder="اسم الوسيط"
                     className={fieldClass()}
                   />
-                  {authMode !== "magic" ? (
-                    <input
-                      name="password"
-                      type="password"
-                      value={authPassword}
-                      onChange={(event) => setAuthPassword(event.target.value)}
-                      placeholder="كلمة المرور"
-                      className={fieldClass()}
-                    />
-                  ) : null}
-                  <button type="submit" className="primary-button justify-center" disabled={!hasCloudPersistence}>
-                    {authMode === "register" ? "إنشاء حساب وإرسال التأكيد" : authMode === "login" ? "تسجيل الدخول" : "إرسال رابط الدخول"}
-                  </button>
-                </form>
-              </>
-            )}
-            {authMessage ? <p className="rounded-md bg-slate-100 p-3 text-sm font-bold leading-7 text-slate-700">{authMessage}</p> : null}
-            <p className="text-xs leading-6 text-slate-500">
-              تأكيد البريد يتم عبر Supabase Auth. SMTP لا يوضع في الكود؛ يتم ضبطه من لوحة Supabase/Render باستخدام إعدادات آمنة خارج Git.
+                ) : null}
+                <input
+                  name="email"
+                  type="email"
+                  value={authEmail}
+                  onChange={(event) => setAuthEmail(event.target.value)}
+                  placeholder="البريد الإلكتروني"
+                  className={fieldClass()}
+                />
+                {authMode !== "magic" ? (
+                  <input
+                    name="password"
+                    type="password"
+                    value={authPassword}
+                    onChange={(event) => setAuthPassword(event.target.value)}
+                    placeholder="كلمة المرور"
+                    className={fieldClass()}
+                  />
+                ) : null}
+                <button type="submit" className="primary-button justify-center" disabled={!hasCloudPersistence}>
+                  {authMode === "register" ? "إنشاء حساب وإرسال التأكيد" : authMode === "login" ? "تسجيل الدخول" : "إرسال رابط الدخول"}
+                </button>
+              </form>
+            </>
+          )}
+          {authMessage ? <p className="rounded-md bg-slate-100 p-3 text-sm font-bold leading-7 text-slate-700">{authMessage}</p> : null}
+          {!hasCloudPersistence ? (
+            <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-bold leading-7 text-amber-900">
+              خدمة الدخول غير مهيأة على هذا النطاق. تواصل مع الإدارة قبل استخدام النظام.
+            </p>
+          ) : null}
+        </div>
+      </Panel>
+    );
+  }
+
+  function renderPublicAuthShell() {
+    return (
+      <main className="min-h-screen bg-slate-100 text-slate-950">
+        <header className="border-b border-slate-200 bg-white px-4 py-4 lg:px-8">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold text-teal-700">مفكرة الوسيط</p>
+              <h1 className="mt-1 text-2xl font-black">إدارة الوساطة العقارية</h1>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setAuthMode("login")} className={authMode === "login" ? "primary-button" : "secondary-button"}>
+                دخول
+              </button>
+              <button type="button" onClick={() => setAuthMode("register")} className={authMode === "register" ? "primary-button" : "secondary-button"}>
+                تسجيل
+              </button>
+            </div>
+          </div>
+        </header>
+        <section className="mx-auto grid max-w-6xl gap-6 p-4 lg:grid-cols-[0.9fr_1.1fr] lg:p-8">
+          <div className="rounded-2xl border border-teal-100 bg-white p-6 shadow-sm">
+            <p className="text-sm font-bold text-teal-700">نظام خاص بالوسطاء</p>
+            <h2 className="mt-3 text-3xl font-black leading-tight text-slate-950">سجل دخولك للوصول إلى بياناتك العقارية</h2>
+            <p className="mt-4 leading-8 text-slate-600">
+              كل حساب له عروضه وطلباته وعملاؤه وتذكيراته الخاصة. لا تظهر بيانات أي مستخدم قبل تسجيل الدخول.
             </p>
           </div>
-        </Panel>
-      );
-    }
+          {renderAuthControls()}
+        </section>
+      </main>
+    );
+  }
 
+  function renderBlockedAccountShell() {
+    return (
+      <main className="min-h-screen bg-slate-100 p-4 text-slate-950 lg:p-8">
+        <div className="mx-auto max-w-2xl">
+          <Panel title="الحساب غير مفعل">
+            <div className="grid gap-3">
+              <p className="leading-8 text-slate-700">تم تسجيل الدخول، لكن هذا الحساب غير مدعو أو لا يملك صلاحية استخدام النظام.</p>
+              {authMessage ? <p className="rounded-md bg-slate-100 p-3 text-sm font-bold leading-7 text-slate-700">{authMessage}</p> : null}
+              <button type="button" onClick={signOut} className="secondary-button justify-center">
+                تسجيل الخروج
+              </button>
+            </div>
+          </Panel>
+        </div>
+      </main>
+    );
+  }
+
+  function renderAdmin() {
     const sectionContent: Record<ProfileSection, React.ReactNode> = {
       settings: (
         <section className="grid gap-4 xl:grid-cols-2">
@@ -1802,14 +1775,10 @@ export default function Home() {
               <Info label="سياسة التسجيل" value={workspace.profile.inviteOnly ? "دعوات فقط" : "قابل للتسجيل العام لاحقاً"} />
             </div>
           </Panel>
-          <Panel title="جاهزية الإنتاج">
-            <ReadinessRow ok label="Git مستقل داخل مجلد المشروع" />
-            <ReadinessRow ok label="المفاتيح لا تقرأ من ملفات fallback" />
-            <ReadinessRow ok={workspace.profile.inviteOnly} label="MVP دعوات فقط مع قابلية توسيع لاحقة" />
-            <ReadinessRow ok={workspace.profile.smtpReady} label="SMTP موثوق قبل الإنتاج" />
-            <ReadinessRow ok={cloudStatus === "synced"} label="الحفظ السحابي عبر Supabase عند تسجيل الدخول" />
-            <ReadinessRow ok label="البحث التقليدي والفلاتر قبل AI search" />
-            <ReadinessRow ok label="سلة مهملات وحذف ناعم محلياً" />
+          <Panel title="خصوصية البيانات">
+            <p className="leading-8 text-slate-700">
+              بيانات العروض والطلبات والعملاء والتذكيرات مرتبطة بحسابك فقط، ويتم تحميلها بعد تسجيل الدخول.
+            </p>
           </Panel>
         </section>
       ),
@@ -1869,6 +1838,24 @@ export default function Home() {
 
   const activeTitle = viewTitles[view];
 
+  if (!authReady) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-slate-100 p-4 text-slate-950">
+        <div className="rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm">
+          <p className="font-black">جاري تجهيز الدخول الآمن...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!authUser) {
+    return renderPublicAuthShell();
+  }
+
+  if (cloudStatus === "blocked") {
+    return renderBlockedAccountShell();
+  }
+
   return (
     <main className="min-h-screen overflow-x-hidden bg-slate-100 text-slate-950">
       <div className="flex min-h-screen">
@@ -1902,7 +1889,7 @@ export default function Home() {
           <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur lg:px-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-bold text-teal-700">MVP محلي جاهز للتوصيل بسوبابيس وفيرسل</p>
+                <p className="text-xs font-bold text-teal-700">مفكرة الوسيط</p>
                 <h2 className="mt-1 text-2xl font-black">{activeTitle}</h2>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -1914,6 +1901,9 @@ export default function Home() {
                   <ShieldCheck className="size-4" aria-hidden="true" />
                   الملف الشخصي
                   {unreadNotifications > 0 ? <span className="rounded-full bg-amber-400 px-2 py-0.5 text-xs text-slate-950">{unreadNotifications}</span> : null}
+                </button>
+                <button type="button" onClick={signOut} className="secondary-button">
+                  خروج
                 </button>
               </div>
             </div>
@@ -1966,11 +1956,3 @@ function Info({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function ReadinessRow({ ok, label }: { ok: boolean; label: string }) {
-  return (
-    <div className="mb-2 flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm font-bold">
-      {ok ? <CheckCircle2 className="size-5 text-teal-700" aria-hidden="true" /> : <XCircle className="size-5 text-amber-600" aria-hidden="true" />}
-      <span className="text-slate-800">{label}</span>
-    </div>
-  );
-}
