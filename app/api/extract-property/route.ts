@@ -1,9 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { requireAuthenticatedRequest } from "@/lib/app-auth";
 import { normalizePropertyData } from "@/lib/normalize-property-data";
 import { propertyJsonSchema } from "@/lib/property-schema";
-import { requireAuthenticatedRequest } from "@/lib/server-auth";
 import { getServerAiKey } from "@/lib/server-ai-keys";
 
 export const runtime = "nodejs";
@@ -111,7 +111,7 @@ async function extractWithGemini(client: GoogleGenAI, text: string) {
 }
 
 export async function POST(request: Request) {
-  const authFailure = await requireAuthenticatedRequest(request);
+  const { response: authFailure } = await requireAuthenticatedRequest();
   if (authFailure) {
     return authFailure;
   }

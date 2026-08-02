@@ -6,8 +6,9 @@
 
 - Node.js 20 أو أحدث
 - npm
-- مفتاح Groq API
-- مفتاح Google Gemini API
+- PostgreSQL
+- مفتاح Groq API للإدخال الصوتي
+- مفتاح Google Gemini API لاستخراج بيانات العقار
 
 ## التثبيت
 
@@ -20,8 +21,17 @@ npm install
 أنشئ ملف `.env.local` في جذر المشروع:
 
 ```bash
+DATABASE_URL=postgresql://user:password@127.0.0.1:5432/wasit_mfkra
+DATABASE_SSL=false
+APP_URL=http://localhost:3000
 GROQ_API_KEY=ضع_مفتاح_Groq_هنا
 GEMINI_API_KEY=ضع_مفتاح_Gemini_هنا
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=ضع_بريد_SMTP_هنا
+SMTP_PASS=ضع_كلمة_مرور_SMTP_هنا
+SMTP_FROM=ضع_بريد_الإرسال_هنا
 ```
 
 لا تستخدم `NEXT_PUBLIC_` مع مفاتيح Groq أو Gemini لأنها يجب أن تبقى على الخادم فقط.
@@ -59,15 +69,30 @@ npm run dev
 http://localhost:3000
 ```
 
-## النشر على Vercel
+## النشر على سيرفر Node/PostgreSQL
 
-1. ارفع المشروع إلى GitHub.
-2. أنشئ مشروعاً جديداً في Vercel.
+1. ثبّت Node.js وPostgreSQL وNginx وPM2.
+2. أنشئ قاعدة بيانات ومستخدم PostgreSQL.
 3. أضف متغيرات البيئة:
+   - `DATABASE_URL`
+   - `APP_URL`
    - `GROQ_API_KEY`
    - `GEMINI_API_KEY`
    - `GEMINI_MODEL` اختياري
-4. انشر المشروع.
+   - `SMTP_HOST`
+   - `SMTP_PORT`
+   - `SMTP_SECURE`
+   - `SMTP_USER`
+   - `SMTP_PASS`
+   - `SMTP_FROM`
+4. شغّل:
+
+```bash
+npm ci
+npm run build
+npm run migrate
+npm run start
+```
 
 قبل إطلاق الإنتاج يجب ضبط SMTP موثوق لتأكيد البريد، استعادة كلمة المرور، OTP، وإشعارات البريد. التشغيل المحلي لا يتوقف على SMTP.
 
@@ -81,7 +106,7 @@ http://localhost:3000
 6. الخادم يتحقق من النتيجة مرة أخرى باستخدام Zod.
 7. الحقول تمتلئ تلقائياً وتبقى قابلة للتعديل.
 8. يراجع المستخدم البيانات ثم يضغط `اعتماد البيانات`.
-9. يظهر JSON النهائي المعتمد دون حفظه في قاعدة بيانات.
+9. تحفظ البيانات في PostgreSQL لكل مستخدم حسب حسابه.
 
 ## أمثلة اختبار
 

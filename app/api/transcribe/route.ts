@@ -1,6 +1,6 @@
 import Groq from "groq-sdk";
 import { NextResponse } from "next/server";
-import { requireAuthenticatedRequest } from "@/lib/server-auth";
+import { requireAuthenticatedRequest } from "@/lib/app-auth";
 import { getServerAiKey } from "@/lib/server-ai-keys";
 
 export const runtime = "nodejs";
@@ -35,7 +35,7 @@ function isSupportedAudio(file: File) {
 }
 
 export async function POST(request: Request) {
-  const authFailure = await requireAuthenticatedRequest(request);
+  const { response: authFailure } = await requireAuthenticatedRequest();
   if (authFailure) {
     return authFailure;
   }

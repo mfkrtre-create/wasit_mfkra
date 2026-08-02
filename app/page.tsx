@@ -32,8 +32,6 @@ import { LocationPicker } from "@/components/LocationPicker";
 import { RealEstateMap } from "@/components/RealEstateMap";
 import { filterMapRecords, type MapRecord } from "@/lib/map-records";
 import { type PropertyData } from "@/lib/property-schema";
-import { getSupabaseBrowserClient, hasSupabaseBrowserConfig } from "@/lib/supabase-browser";
-import { type User } from "@supabase/supabase-js";
 
 type ViewId =
   | "dashboard"
@@ -132,8 +130,16 @@ type FilterState = {
   city: string;
 };
 
+type AuthUser = {
+  id: string;
+  email: string;
+  name: string;
+  role: "admin" | "broker";
+  timezone: string;
+  emailConfirmed: boolean;
+};
+
 const riyadhTimezone = "Asia/Riyadh";
-const hasCloudPersistence = hasSupabaseBrowserConfig();
 
 const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: "dashboard", label: "لوحة التحكم", icon: LayoutDashboard },
@@ -420,44 +426,40 @@ export default function Home() {
   const [authPassword, setAuthPassword] = useState("");
   const [authName, setAuthName] = useState("");
   const [authMode, setAuthMode] = useState<"login" | "register" | "magic">("login");
-  const [authUser, setAuthUser] = useState<User | null>(null);
-  const [authReady, setAuthReady] = useState(!hasCloudPersistence);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
-  const [cloudStatus, setCloudStatus] = useState<"local" | "checking" | "synced" | "blocked" | "error">(
-    hasCloudPersistence ? "checking" : "local",
-  );
+  const [cloudStatus, setCloudStatus] = useState<"local" | "checking" | "synced" | "blocked" | "error">("checking");
   const cloudLoadedRef = useRef(false);
 
   useEffect(() => {
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) {
-      return;
-    }
-
     let cancelled = false;
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (cancelled) {
-        return;
+    async function loadSession() {
+      try {
+        const response = await fetch("/api/auth/session", { cache: "no-store" });
+        const body = (await response.json()) as { user: AuthUser | null };
+        if (cancelled) {
+          return;
+        }
+        setAuthUser(body.user);
+        setCloudStatus(body.user ? "checking" : "local");
+      } catch {
+        if (!cancelled) {
+          setCloudStatus("error");
+          setAuthMessage("تعذر الاتصال بخدمة الدخول.");
+        }
+      } finally {
+        if (!cancelled) {
+          setAuthReady(true);
+        }
       }
-      setAuthUser(data.session?.user ?? null);
-      setAuthReady(true);
-      setCloudStatus(data.session?.user ? "checking" : "local");
-    });
+    }
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAuthUser(session?.user ?? null);
-      setWorkspace(seedState);
-      setSelectedShareId("");
-      setView("dashboard");
-      setProfileSection("settings");
-      cloudLoadedRef.current = false;
-      setCloudStatus(session?.user ? "checking" : "local");
-    });
+    void loadSession();
 
     return () => {
       cancelled = true;
-      listener.subscription.unsubscribe();
     };
   }, []);
 
@@ -472,79 +474,40 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase || !authUser || !authReady || cloudLoadedRef.current) {
+    if (!authUser || !authReady || cloudLoadedRef.current) {
       return;
     }
 
-    const activeSupabase = supabase;
     const activeUser = authUser;
     let cancelled = false;
 
     async function loadCloudWorkspace() {
       setCloudStatus("checking");
-      const email = activeUser.email ?? "";
-      const profileName = String(activeUser.user_metadata?.name || email || "وسيط عقاري");
-      const profilePayload = {
-        id: activeUser.id,
-        email,
-        name: profileName,
-        role: "broker",
-        timezone: riyadhTimezone,
-        invite_only: false,
-        smtp_ready: false,
-      };
-
-      const profileResult = await activeSupabase
-        .from("profiles")
-        .select("id,name,role,timezone,invite_only,smtp_ready")
-        .eq("id", activeUser.id)
-        .maybeSingle();
-
-      if (profileResult.error) {
-        if (!cancelled) {
-          setCloudStatus("blocked");
-          setAuthMessage("تعذر قراءة ملف الحساب. تواصل مع الإدارة إذا تكرر الخطأ.");
-        }
-        return;
-      }
-
-      let profile = profileResult.data;
-      if (!profile) {
-        const createdProfile = await activeSupabase.from("profiles").insert(profilePayload).select("id,name,role,timezone,invite_only,smtp_ready").maybeSingle();
-        if (createdProfile.error || !createdProfile.data) {
-          if (!cancelled) {
-            setCloudStatus("blocked");
-            setAuthMessage("تعذر تجهيز حسابك بعد تسجيل الدخول. تواصل مع الإدارة إذا تكرر الخطأ.");
-          }
-          return;
-        }
-        profile = createdProfile.data;
-      }
-
-      const { data, error } = await activeSupabase.from("workspace_snapshots").select("state").eq("user_id", activeUser.id).maybeSingle();
+      const response = await fetch("/api/workspace", { cache: "no-store" });
+      const body = (await response.json()) as { state: WorkspaceState | null; user: AuthUser; error?: string };
       if (cancelled) {
         return;
       }
 
-      if (error) {
+      if (!response.ok) {
         setCloudStatus("error");
-        setAuthMessage("تعذر تحميل بيانات الحساب. تواصل مع الإدارة إذا تكرر الخطأ.");
+        setAuthMessage(body.error ?? "تعذر تحميل بيانات الحساب. تواصل مع الإدارة إذا تكرر الخطأ.");
         return;
       }
 
-      if (data?.state && typeof data.state === "object") {
-        const cloudWorkspace = normalizeWorkspaceState(data.state as WorkspaceState);
+      const profile = body.user ?? activeUser;
+      if (body.state && typeof body.state === "object") {
+        const cloudWorkspace = normalizeWorkspaceState(body.state);
         setWorkspace({
           ...cloudWorkspace,
           profile: {
             ...cloudWorkspace.profile,
             id: profile.id,
-            name: profile.name || profileName,
+            name: profile.name || "وسيط عقاري",
             role: profile.role === "admin" ? "admin" : "broker",
             timezone: profile.timezone || riyadhTimezone,
             inviteOnly: false,
-            smtpReady: Boolean(profile.smtp_ready),
+            smtpReady: true,
           },
         });
         setSelectedShareId(cloudWorkspace.records.find((record) => !record.deletedAt)?.id ?? "");
@@ -554,11 +517,11 @@ export default function Home() {
           profile: {
             ...seedState.profile,
             id: profile.id,
-            name: profile.name || profileName,
+            name: profile.name || "وسيط عقاري",
             role: profile.role === "admin" ? "admin" : "broker",
             timezone: profile.timezone || riyadhTimezone,
             inviteOnly: false,
-            smtpReady: Boolean(profile.smtp_ready),
+            smtpReady: true,
           },
         });
         setSelectedShareId("");
@@ -577,17 +540,18 @@ export default function Home() {
   }, [authReady, authUser]);
 
   useEffect(() => {
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase || !authUser || !cloudLoadedRef.current || cloudStatus === "blocked") {
+    if (!authUser || !cloudLoadedRef.current || cloudStatus === "blocked") {
       return;
     }
 
     const timer = window.setTimeout(() => {
-      supabase
-        .from("workspace_snapshots")
-        .upsert({ user_id: authUser.id, state: workspace, version: 1 }, { onConflict: "user_id" })
-        .then(({ error }) => {
-          if (error) {
+      fetch("/api/workspace", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ state: workspace, version: 1 }),
+      })
+        .then((response) => {
+          if (!response.ok) {
             setCloudStatus("error");
             setAuthMessage("تعذر حفظ آخر تغيير في قاعدة البيانات.");
             return;
@@ -679,12 +643,6 @@ export default function Home() {
   }
 
   async function sendLoginLink(formData: FormData) {
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) {
-      setAuthMessage("خدمة الدخول غير مهيأة على هذا النطاق.");
-      return;
-    }
-
     const email = String(formData.get("email") ?? authEmail).trim().toLowerCase();
     if (!email) {
       setAuthMessage("أدخل البريد الإلكتروني أولاً.");
@@ -693,21 +651,17 @@ export default function Home() {
 
     setAuthEmail(email);
     setAuthMessage("جاري إرسال رابط الدخول...");
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.origin },
+    const response = await fetch("/api/auth/magic", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
     });
+    const body = (await readJsonResponse<{ message?: string }>(response)) as { message?: string; error?: string };
 
-    setAuthMessage(error ? "تعذر إرسال رابط الدخول. تحقق من إعدادات البريد في لوحة الخدمة." : "تم إرسال رابط الدخول إذا كان البريد مسموحاً.");
+    setAuthMessage(response.ok ? body.message ?? "تم إرسال رابط الدخول إذا كان البريد مسجلاً." : body.error ?? "تعذر إرسال رابط الدخول.");
   }
 
   async function registerWithEmail(formData: FormData) {
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) {
-      setAuthMessage("خدمة الدخول غير مهيأة على هذا النطاق.");
-      return;
-    }
-
     const email = String(formData.get("email") ?? authEmail).trim().toLowerCase();
     const password = String(formData.get("password") ?? authPassword);
     const name = String(formData.get("name") ?? authName).trim();
@@ -721,29 +675,33 @@ export default function Home() {
     setAuthName(name);
     setAuthMessage("جاري إنشاء الحساب وإرسال رسالة التأكيد...");
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: window.location.origin,
-        data: { name },
-      },
+    const response = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, name }),
     });
+    const body = (await readJsonResponse<{ user: AuthUser | null; message?: string }>(response)) as {
+      user: AuthUser | null;
+      message?: string;
+      error?: string;
+    };
 
-    setAuthMessage(
-      error
-        ? "تعذر إنشاء الحساب. تحقق من البريد أو قوة كلمة المرور."
-        : "تم إنشاء الحساب. افتح بريدك واضغط رابط التأكيد، ثم سجّل الدخول.",
-    );
-  }
-
-  async function signInWithEmail(formData: FormData) {
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) {
-      setAuthMessage("خدمة الدخول غير مهيأة على هذا النطاق.");
+    if (!response.ok) {
+      setAuthMessage(body.error ?? "تعذر إنشاء الحساب. تحقق من البريد أو قوة كلمة المرور.");
       return;
     }
 
+    if (body.user) {
+      setAuthUser(body.user);
+      setWorkspace(seedState);
+      setSelectedShareId("");
+      cloudLoadedRef.current = false;
+      setCloudStatus("checking");
+    }
+    setAuthMessage(body.message ?? "تم إنشاء الحساب.");
+  }
+
+  async function signInWithEmail(formData: FormData) {
     const email = String(formData.get("email") ?? authEmail).trim().toLowerCase();
     const password = String(formData.get("password") ?? authPassword);
     if (!email || !password) {
@@ -754,13 +712,27 @@ export default function Home() {
     setAuthEmail(email);
     setAuthPassword(password);
     setAuthMessage("جاري تسجيل الدخول...");
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setAuthMessage(error ? "تعذر تسجيل الدخول. تأكد من تأكيد البريد وصحة كلمة المرور." : "تم تسجيل الدخول بنجاح.");
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const body = (await readJsonResponse<{ user: AuthUser; message?: string }>(response)) as { user?: AuthUser; message?: string; error?: string };
+    if (!response.ok || !body.user) {
+      setAuthMessage(body.error ?? "تعذر تسجيل الدخول. تأكد من البريد وكلمة المرور.");
+      return;
+    }
+
+    setAuthUser(body.user);
+    setWorkspace(seedState);
+    setSelectedShareId("");
+    cloudLoadedRef.current = false;
+    setCloudStatus("checking");
+    setAuthMessage(body.message ?? "تم تسجيل الدخول بنجاح.");
   }
 
   async function signOut() {
-    const supabase = getSupabaseBrowserClient();
-    await supabase?.auth.signOut();
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
     setAuthUser(null);
     setWorkspace(seedState);
     setSelectedShareId("");
@@ -898,16 +870,6 @@ export default function Home() {
     }
   }
 
-  async function getAuthAccessToken() {
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) {
-      return null;
-    }
-
-    const { data } = await supabase.auth.getSession();
-    return data.session?.access_token ?? null;
-  }
-
   async function analyzeText(value = aiText) {
     if (!requireAuthenticatedAction()) {
       return;
@@ -922,14 +884,9 @@ export default function Home() {
     setAiBusy(true);
     setAiError(null);
     try {
-      const token = await getAuthAccessToken();
-      if (!token) {
-        throw new Error("سجل الدخول أولاً لاستخدام الإدخال الذكي.");
-      }
-
       const response = await fetch("/api/extract-property", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: cleanText }),
       });
       const body = await readJsonResponse<PropertyData>(response);
@@ -953,14 +910,9 @@ export default function Home() {
     setAiBusy(true);
     setAiError(null);
     try {
-      const token = await getAuthAccessToken();
-      if (!token) {
-        throw new Error("سجل الدخول أولاً لاستخدام التسجيل الصوتي.");
-      }
-
       const formData = new FormData();
       formData.append("audio", audio, filename);
-      const response = await fetch("/api/transcribe", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: formData });
+      const response = await fetch("/api/transcribe", { method: "POST", body: formData });
       const body = await readJsonResponse<{ text: string }>(response);
       if (!response.ok) {
         throw new Error(body.error ?? "فشل تحويل الصوت إلى نص.");
@@ -1734,18 +1686,13 @@ export default function Home() {
                     className={fieldClass()}
                   />
                 ) : null}
-                <button type="submit" className="primary-button justify-center" disabled={!hasCloudPersistence}>
+                <button type="submit" className="primary-button justify-center">
                   {authMode === "register" ? "إنشاء حساب وإرسال التأكيد" : authMode === "login" ? "تسجيل الدخول" : "إرسال رابط الدخول"}
                 </button>
               </form>
             </>
           )}
           {authMessage ? <p className="rounded-md bg-slate-100 p-3 text-sm font-bold leading-7 text-slate-700">{authMessage}</p> : null}
-          {!hasCloudPersistence ? (
-            <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-bold leading-7 text-amber-900">
-              خدمة الدخول غير مهيأة على هذا النطاق. تواصل مع الإدارة قبل استخدام النظام.
-            </p>
-          ) : null}
         </div>
       </Panel>
     );

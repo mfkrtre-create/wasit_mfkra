@@ -61,21 +61,23 @@ describe("map page source", () => {
   it("protects AI server actions with authenticated requests", () => {
     const extractSource = readFileSync(join(process.cwd(), "app", "api", "extract-property", "route.ts"), "utf8");
     const transcribeSource = readFileSync(join(process.cwd(), "app", "api", "transcribe", "route.ts"), "utf8");
-    const authSource = readFileSync(join(process.cwd(), "lib", "server-auth.ts"), "utf8");
+    const authSource = readFileSync(join(process.cwd(), "lib", "app-auth.ts"), "utf8");
 
-    expect(extractSource).toContain("requireAuthenticatedRequest(request)");
-    expect(transcribeSource).toContain("requireAuthenticatedRequest(request)");
-    expect(authSource).toContain("supabase.auth.getUser(token)");
+    expect(extractSource).toContain("requireAuthenticatedRequest()");
+    expect(transcribeSource).toContain("requireAuthenticatedRequest()");
+    expect(authSource).toContain("app_sessions");
+    expect(authSource).toContain("wasit_session");
     expect(authSource).toContain("سجل الدخول أولاً لاستخدام هذه الخدمة.");
   });
 
-  it("keeps registration public at the database policy layer", () => {
-    const migrationSource = readFileSync(join(process.cwd(), "supabase", "migrations", "202608010002_public_registration.sql"), "utf8");
+  it("uses server PostgreSQL auth and workspace tables", () => {
+    const migrationSource = readFileSync(join(process.cwd(), "db", "migrations", "202608020001_server_auth.sql"), "utf8");
     const migrateScript = readFileSync(join(process.cwd(), "scripts", "migrate.mjs"), "utf8");
 
-    expect(migrationSource).toContain('"authenticated users can create own profile"');
-    expect(migrationSource).toContain("invite_only = false");
-    expect(migrationSource).not.toContain("exists (");
-    expect(migrateScript).toContain("202608010002_public_registration.sql");
+    expect(migrationSource).toContain("create table if not exists public.app_users");
+    expect(migrationSource).toContain("create table if not exists public.app_sessions");
+    expect(migrationSource).toContain("create table if not exists public.workspace_snapshots");
+    expect(migrationSource).not.toContain("auth.uid()");
+    expect(migrateScript).toContain("202608020001_server_auth.sql");
   });
 });

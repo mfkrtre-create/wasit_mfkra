@@ -5,11 +5,7 @@ import pg from "pg";
 
 const { Client } = pg;
 
-const migrations = [
-  "202607310001_core_mvp.sql",
-  "202608010001_record_status_by_kind.sql",
-  "202608010002_public_registration.sql",
-];
+const migrations = ["202608020001_server_auth.sql"];
 const databaseUrl = process.env.DATABASE_URL;
 
 if (!databaseUrl) {
@@ -19,7 +15,7 @@ if (!databaseUrl) {
 
 const client = new Client({
   connectionString: databaseUrl,
-  ssl: { rejectUnauthorized: false },
+  ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : undefined,
 });
 
 try {
@@ -38,7 +34,7 @@ try {
       continue;
     }
 
-    const sql = await readFile(join(process.cwd(), "supabase", "migrations", migration), "utf8");
+    const sql = await readFile(join(process.cwd(), "db", "migrations", migration), "utf8");
     await client.query("begin");
     try {
       await client.query(sql);
