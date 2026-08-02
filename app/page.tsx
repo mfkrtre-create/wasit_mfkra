@@ -133,9 +133,12 @@ type FilterState = {
 type AuthUser = {
   id: string;
   email: string;
+  username: string;
+  phone: string;
   name: string;
   role: "admin" | "broker";
   timezone: string;
+  falLicense: string;
   emailConfirmed: boolean;
 };
 
@@ -442,8 +445,14 @@ export default function Home() {
   const [recordFormVersion, setRecordFormVersion] = useState(0);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
+  const [authIdentifier, setAuthIdentifier] = useState("");
   const [authName, setAuthName] = useState("");
-  const [authMode, setAuthMode] = useState<"login" | "register" | "magic">("login");
+  const [authPhone, setAuthPhone] = useState("");
+  const [authUsername, setAuthUsername] = useState("");
+  const [authFalLicense, setAuthFalLicense] = useState("");
+  const [authOtp, setAuthOtp] = useState("");
+  const [authNewPassword, setAuthNewPassword] = useState("");
+  const [authMode, setAuthMode] = useState<"login" | "register" | "confirm" | "forgot" | "reset">("login");
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
@@ -672,7 +681,7 @@ export default function Home() {
     }));
   }
 
-  async function sendLoginLink(formData: FormData) {
+  async function requestPasswordReset(formData: FormData) {
     const email = String(formData.get("email") ?? authEmail).trim().toLowerCase();
     if (!email) {
       setAuthMessage("أدخل البريد الإلكتروني أولاً.");
@@ -680,35 +689,47 @@ export default function Home() {
     }
 
     setAuthEmail(email);
-    setAuthMessage("جاري إرسال رابط الدخول...");
-    const response = await fetch("/api/auth/magic", {
+    setAuthMessage("جاري إرسال رمز استعادة كلمة المرور...");
+    const response = await fetch("/api/auth/forgot-password", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email }),
     });
     const body = (await readJsonResponse<{ message?: string }>(response)) as { message?: string; error?: string };
 
-    setAuthMessage(response.ok ? body.message ?? "تم إرسال رابط الدخول إذا كان البريد مسجلاً." : body.error ?? "تعذر إرسال رابط الدخول.");
+    if (response.ok) {
+      setAuthMode("reset");
+      setAuthMessage(body.message ?? "إذا كان البريد مسجلاً، سيصلك رمز OTP.");
+      return;
+    }
+
+    setAuthMessage(body.error ?? "تعذر إرسال رمز الاستعادة.");
   }
 
   async function registerWithEmail(formData: FormData) {
     const email = String(formData.get("email") ?? authEmail).trim().toLowerCase();
     const password = String(formData.get("password") ?? authPassword);
     const name = String(formData.get("name") ?? authName).trim();
-    if (!email || password.length < 8) {
-      setAuthMessage("أدخل بريداً صحيحاً وكلمة مرور لا تقل عن 8 أحرف.");
+    const phone = String(formData.get("phone") ?? authPhone).trim();
+    const username = String(formData.get("username") ?? authUsername).trim();
+    const falLicense = String(formData.get("falLicense") ?? authFalLicense).trim();
+    if (!name || !phone || !email || password.length < 8) {
+      setAuthMessage("أدخل اسم الوسيط والجوال والبريد وكلمة مرور لا تقل عن 8 أحرف.");
       return;
     }
 
     setAuthEmail(email);
     setAuthPassword(password);
     setAuthName(name);
-    setAuthMessage("جاري إنشاء الحساب وإرسال رسالة التأكيد...");
+    setAuthPhone(phone);
+    setAuthUsername(username);
+    setAuthFalLicense(falLicense);
+    setAuthMessage("جاري إنشاء الحساب وإرسال رمز OTP...");
 
     const response = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, name }),
+      body: JSON.stringify({ email, password, name, phone, username, falLicense }),
     });
     const body = (await readJsonResponse<{ user: AuthUser | null; message?: string }>(response)) as {
       user: AuthUser | null;
@@ -721,31 +742,71 @@ export default function Home() {
       return;
     }
 
-    if (body.user) {
-      setAuthUser(body.user);
-      setWorkspace(seedState);
-      setSelectedShareId("");
-      cloudLoadedRef.current = false;
-      setCloudStatus("checking");
-    }
+    setAuthMode("confirm");
     setAuthMessage(body.message ?? "تم إنشاء الحساب.");
   }
 
-  async function signInWithEmail(formData: FormData) {
+  async function confirmEmailOtp(formData: FormData) {
     const email = String(formData.get("email") ?? authEmail).trim().toLowerCase();
-    const password = String(formData.get("password") ?? authPassword);
-    if (!email || !password) {
-      setAuthMessage("أدخل البريد وكلمة المرور.");
+    const code = String(formData.get("code") ?? authOtp).trim();
+    if (!email || !/^\d{6}$/.test(code)) {
+      setAuthMessage("أدخل البريد ورمز OTP المكون من 6 أرقام.");
       return;
     }
 
     setAuthEmail(email);
+    setAuthOtp(code);
+    setAuthMessage("جاري تفعيل الحساب...");
+    const response = await fetch("/api/auth/confirm-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, code }),
+    });
+    const body = (await readJsonResponse<{ user: AuthUser; message?: string }>(response)) as { user?: AuthUser; message?: string; error?: string };
+    if (!response.ok || !body.user) {
+      setAuthMessage(body.error ?? "تعذر تفعيل الحساب.");
+      return;
+    }
+
+    setAuthUser(body.user);
+    setWorkspace(seedState);
+    setSelectedShareId("");
+    cloudLoadedRef.current = false;
+    setCloudStatus("checking");
+    setAuthMessage(body.message ?? "تم تفعيل الحساب.");
+  }
+
+  async function resendConfirmationOtp() {
+    const email = authEmail.trim().toLowerCase();
+    if (!email) {
+      setAuthMessage("أدخل البريد الإلكتروني أولاً.");
+      return;
+    }
+
+    const response = await fetch("/api/auth/resend-confirmation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    const body = (await readJsonResponse<{ message?: string }>(response)) as { message?: string; error?: string };
+    setAuthMessage(response.ok ? body.message ?? "تم إرسال رمز جديد." : body.error ?? "تعذر إرسال رمز جديد.");
+  }
+
+  async function signInWithEmail(formData: FormData) {
+    const identifier = String(formData.get("identifier") ?? authIdentifier).trim();
+    const password = String(formData.get("password") ?? authPassword);
+    if (!identifier || !password) {
+      setAuthMessage("أدخل اسم المستخدم أو الجوال أو البريد مع كلمة المرور.");
+      return;
+    }
+
+    setAuthIdentifier(identifier);
     setAuthPassword(password);
     setAuthMessage("جاري تسجيل الدخول...");
     const response = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ identifier, password }),
     });
     const body = (await readJsonResponse<{ user: AuthUser; message?: string }>(response)) as { user?: AuthUser; message?: string; error?: string };
     if (!response.ok || !body.user) {
@@ -759,6 +820,38 @@ export default function Home() {
     cloudLoadedRef.current = false;
     setCloudStatus("checking");
     setAuthMessage(body.message ?? "تم تسجيل الدخول بنجاح.");
+  }
+
+  async function resetPasswordWithOtp(formData: FormData) {
+    const email = String(formData.get("email") ?? authEmail).trim().toLowerCase();
+    const code = String(formData.get("code") ?? authOtp).trim();
+    const password = String(formData.get("password") ?? authNewPassword);
+    if (!email || !/^\d{6}$/.test(code) || password.length < 8) {
+      setAuthMessage("أدخل البريد ورمز OTP وكلمة مرور جديدة لا تقل عن 8 أحرف.");
+      return;
+    }
+
+    const response = await fetch("/api/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, code, password }),
+    });
+    const body = (await readJsonResponse<{ message?: string }>(response)) as { message?: string; error?: string };
+    if (!response.ok) {
+      setAuthMessage(body.error ?? "تعذر تغيير كلمة المرور.");
+      return;
+    }
+
+    const sessionResponse = await fetch("/api/auth/session", { cache: "no-store" });
+    const sessionBody = (await readJsonResponse<{ user: AuthUser | null }>(sessionResponse)) as { user?: AuthUser | null };
+    if (sessionBody.user) {
+      setAuthUser(sessionBody.user);
+      setWorkspace(seedState);
+      setSelectedShareId("");
+      cloudLoadedRef.current = false;
+      setCloudStatus("checking");
+    }
+    setAuthMessage(body.message ?? "تم تغيير كلمة المرور وتسجيل الدخول.");
   }
 
   async function signOut() {
@@ -1820,11 +1913,13 @@ export default function Home() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-3 gap-2 rounded-lg bg-slate-100 p-1 text-sm font-bold">
+              <div className="grid grid-cols-5 gap-2 rounded-lg bg-slate-100 p-1 text-sm font-bold">
                 {[
                   { id: "login", label: "دخول" },
                   { id: "register", label: "تسجيل" },
-                  { id: "magic", label: "رابط سريع" },
+                  { id: "confirm", label: "تفعيل OTP" },
+                  { id: "forgot", label: "استعادة كلمة المرور" },
+                  { id: "reset", label: "تغيير المرور" },
                 ].map((item) => (
                   <button
                     key={item.id}
@@ -1847,30 +1942,81 @@ export default function Home() {
                     void registerWithEmail(formData);
                   } else if (authMode === "login") {
                     void signInWithEmail(formData);
+                  } else if (authMode === "confirm") {
+                    void confirmEmailOtp(formData);
+                  } else if (authMode === "forgot") {
+                    void requestPasswordReset(formData);
+                  } else if (authMode === "reset") {
+                    void resetPasswordWithOtp(formData);
                   } else {
-                    void sendLoginLink(formData);
+                    void signInWithEmail(formData);
                   }
                 }}
                 className="grid gap-2"
               >
                 {authMode === "register" ? (
+                  <>
+                    <input
+                      name="name"
+                      required
+                      value={authName}
+                      onChange={(event) => setAuthName(event.target.value)}
+                      placeholder="اسم الوسيط"
+                      className={fieldClass()}
+                    />
+                    <input
+                      name="phone"
+                      required
+                      value={authPhone}
+                      onChange={(event) => setAuthPhone(event.target.value)}
+                      placeholder="رقم الجوال"
+                      className={fieldClass()}
+                    />
+                    <input
+                      name="username"
+                      value={authUsername}
+                      onChange={(event) => setAuthUsername(event.target.value)}
+                      placeholder="اسم مستخدم اختياري - إذا تركته يستخدم رقم الجوال"
+                      className={fieldClass()}
+                    />
+                    <input
+                      name="falLicense"
+                      value={authFalLicense}
+                      onChange={(event) => setAuthFalLicense(event.target.value)}
+                      placeholder="رقم رخصة فال - اختياري"
+                      className={fieldClass()}
+                    />
+                  </>
+                ) : null}
+                {authMode === "login" ? (
                   <input
-                    name="name"
-                    value={authName}
-                    onChange={(event) => setAuthName(event.target.value)}
-                    placeholder="اسم الوسيط"
+                    name="identifier"
+                    value={authIdentifier}
+                    onChange={(event) => setAuthIdentifier(event.target.value)}
+                    placeholder="اسم المستخدم أو الجوال أو البريد"
+                    className={fieldClass()}
+                  />
+                ) : (
+                  <input
+                    name="email"
+                    type="email"
+                    value={authEmail}
+                    onChange={(event) => setAuthEmail(event.target.value)}
+                    placeholder="البريد الإلكتروني"
+                    className={fieldClass()}
+                  />
+                )}
+                {authMode === "confirm" || authMode === "reset" ? (
+                  <input
+                    name="code"
+                    inputMode="numeric"
+                    value={authOtp}
+                    onChange={(event) => setAuthOtp(event.target.value)}
+                    placeholder="رمز OTP المكون من 6 أرقام"
                     className={fieldClass()}
                   />
                 ) : null}
-                <input
-                  name="email"
-                  type="email"
-                  value={authEmail}
-                  onChange={(event) => setAuthEmail(event.target.value)}
-                  placeholder="البريد الإلكتروني"
-                  className={fieldClass()}
-                />
-                {authMode !== "magic" ? (
+                {authMode === "login" || authMode === "register" ? (
                   <input
                     name="password"
                     type="password"
@@ -1880,9 +2026,32 @@ export default function Home() {
                     className={fieldClass()}
                   />
                 ) : null}
+                {authMode === "reset" ? (
+                  <input
+                    name="password"
+                    type="password"
+                    value={authNewPassword}
+                    onChange={(event) => setAuthNewPassword(event.target.value)}
+                    placeholder="كلمة المرور الجديدة"
+                    className={fieldClass()}
+                  />
+                ) : null}
                 <button type="submit" className="primary-button justify-center">
-                  {authMode === "register" ? "إنشاء حساب وإرسال التأكيد" : authMode === "login" ? "تسجيل الدخول" : "إرسال رابط الدخول"}
+                  {authMode === "register"
+                    ? "إنشاء حساب وإرسال OTP"
+                    : authMode === "login"
+                      ? "تسجيل الدخول"
+                      : authMode === "confirm"
+                        ? "تفعيل الحساب"
+                        : authMode === "forgot"
+                          ? "إرسال رمز الاستعادة"
+                          : "تغيير كلمة المرور"}
                 </button>
+                {authMode === "confirm" ? (
+                  <button type="button" onClick={() => void resendConfirmationOtp()} className="secondary-button justify-center">
+                    إعادة إرسال رمز التفعيل
+                  </button>
+                ) : null}
               </form>
             </>
           )}
@@ -1950,6 +2119,9 @@ export default function Home() {
           <Panel title="إعدادات الحساب">
             <div className="grid gap-3">
               <Info label="المستخدم" value={workspace.profile.name} />
+              <Info label="الجوال" value={authUser?.phone ?? ""} />
+              <Info label="اسم المستخدم" value={authUser?.username ?? ""} />
+              <Info label="رخصة فال" value={authUser?.falLicense || "غير مضافة"} />
               <Info label="الدور" value={workspace.profile.role === "admin" ? "مدير" : "وسيط"} />
               <Info label="المنطقة الزمنية" value={workspace.profile.timezone} />
               <Info label="سياسة التسجيل" value="مفتوح لأي مستخدم" />

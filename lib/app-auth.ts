@@ -8,9 +8,12 @@ import { getDb } from "@/lib/db";
 export type AppUser = {
   id: string;
   email: string;
+  username: string;
+  phone: string;
   name: string;
   role: "admin" | "broker";
   timezone: string;
+  falLicense: string;
   emailConfirmed: boolean;
 };
 
@@ -42,9 +45,12 @@ function rowToUser(row: Record<string, unknown>): AppUser {
   return {
     id: String(row.id),
     email: String(row.email),
+    username: String(row.username || row.phone || row.email),
+    phone: String(row.phone || ""),
     name: String(row.name || "وسيط عقاري"),
     role: row.role === "admin" ? "admin" : "broker",
     timezone: String(row.timezone || "Asia/Riyadh"),
+    falLicense: String(row.fal_license || ""),
     emailConfirmed: Boolean(row.email_confirmed_at),
   };
 }
@@ -85,7 +91,7 @@ export async function getCurrentUser() {
 
   const result = await getDb().query(
     `
-      select u.id, u.email, u.name, u.role, u.timezone, u.email_confirmed_at
+      select u.id, u.email, u.username, u.phone, u.name, u.role, u.timezone, u.fal_license, u.email_confirmed_at
       from app_sessions s
       join app_users u on u.id = s.user_id
       where s.token_hash = $1 and s.expires_at > now()

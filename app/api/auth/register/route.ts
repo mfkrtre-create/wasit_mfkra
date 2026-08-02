@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createSession, createToken, hashToken, publicAppUrl, requireEmailConfirmation } from "@/lib/app-auth";
 import { getDb } from "@/lib/db";
-import { hasSmtpConfig, sendMail } from "@/lib/mailer";
+import { hasSmtpConfig } from "@/lib/mailer";
+import { sendEmailConfirmationOtp } from "@/lib/otp";
 import { hashPassword } from "@/lib/passwords";
 
 export const runtime = "nodejs";
@@ -10,8 +10,20 @@ export const runtime = "nodejs";
 const schema = z.object({
   email: z.string().trim().email(),
   password: z.string().min(8),
-  name: z.string().trim().min(1).max(120).optional(),
+  name: z.string().trim().min(1).max(120),
+  phone: z.string().trim().min(7).max(32),
+  username: z.string().trim().min(3).max(40).optional().or(z.literal("")),
+  falLicense: z.string().trim().max(80).optional().or(z.literal("")),
 });
+
+function normalizePhone(phone: string) {
+  return phone.replace(/[^\d]/g, "").replace(/^0/, "966");
+}
+
+function normalizeUsername(username: string, phone: string) {
+  const clean = username.trim().toLowerCase().replace(/[^a-z0-9_.-]/g, "");
+  return clean || phone;
+}
 
 export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json().catch(() => null));
@@ -20,17 +32,21 @@ export async function POST(request: Request) {
   }
 
   const email = parsed.data.email.toLowerCase();
-  const passwordHash = await hashPassword(parsed.data.password);
-  const confirmationRequired = requireEmailConfirmation();
+  if (!hasSmtpConfig()) {
+    return NextResponse.json({ error: "لا يمكن إنشاء الحساب قبل تهيئة البريد لتفعيل OTP." }, { status: 503 });
+  }
 
+  const passwordHash = await hashPassword(parsed.data.password);
+  const phone = normalizePhone(parsed.data.phone);
+  const username = normalizeUsername(parsed.data.username ?? "", phone);
   const result = await getDb()
     .query(
       `
-        insert into app_users (email, name, password_hash, email_confirmed_at)
-        values ($1, $2, $3, case when $4 then null else now() end)
-        returning id, email, name, role, timezone, email_confirmed_at
+        insert into app_users (email, username, phone, name, fal_license, password_hash, email_confirmed_at)
+        values ($1, $2, $3, $4, $5, $6, null)
+        returning id, email, username, phone, name, role, timezone, fal_license, email_confirmed_at
       `,
-      [email, parsed.data.name || "وسيط عقاري", passwordHash, confirmationRequired],
+      [email, username, phone, parsed.data.name, parsed.data.falLicense || "", passwordHash],
     )
     .catch((error: unknown) => {
       if (typeof error === "object" && error && "code" in error && error.code === "23505") {
@@ -46,33 +62,15 @@ export async function POST(request: Request) {
   const user = {
     id: String(result.rows[0].id),
     email: String(result.rows[0].email),
+    username: String(result.rows[0].username),
+    phone: String(result.rows[0].phone),
     name: String(result.rows[0].name),
     role: result.rows[0].role === "admin" ? "admin" : "broker",
     timezone: String(result.rows[0].timezone || "Asia/Riyadh"),
+    falLicense: String(result.rows[0].fal_license || ""),
     emailConfirmed: Boolean(result.rows[0].email_confirmed_at),
   };
 
-  if (confirmationRequired) {
-    if (!hasSmtpConfig()) {
-      return NextResponse.json({ error: "تأكيد البريد مطلوب لكن SMTP غير مهيأ على الخادم." }, { status: 503 });
-    }
-
-    const token = createToken();
-    await getDb().query("insert into app_tokens (user_id, token_hash, purpose, expires_at) values ($1, $2, 'email_confirm', now() + interval '24 hours')", [
-      user.id,
-      hashToken(token),
-    ]);
-    const confirmUrl = `${publicAppUrl(request)}/api/auth/confirm?token=${encodeURIComponent(token)}`;
-    await sendMail({
-      to: user.email,
-      subject: "تأكيد بريد مفكرة الوسيط",
-      text: `لتأكيد بريدك افتح الرابط: ${confirmUrl}`,
-      html: `<p>لتأكيد بريدك في مفكرة الوسيط اضغط الرابط:</p><p><a href="${confirmUrl}">تأكيد البريد</a></p>`,
-    });
-
-    return NextResponse.json({ user: null, message: "تم إنشاء الحساب. افتح بريدك واضغط رابط التأكيد، ثم سجّل الدخول." });
-  }
-
-  await createSession(user.id);
-  return NextResponse.json({ user, message: "تم إنشاء الحساب وتسجيل الدخول بنجاح." });
+  await sendEmailConfirmationOtp({ userId: user.id, email: user.email, name: user.name });
+  return NextResponse.json({ user: null, email: user.email, message: "تم إنشاء الحساب. أدخل رمز OTP المرسل إلى بريدك لتفعيل الحساب." });
 }

@@ -72,13 +72,18 @@ describe("map page source", () => {
 
   it("uses server PostgreSQL auth and workspace tables", () => {
     const migrationSource = readFileSync(join(process.cwd(), "db", "migrations", "202608020001_server_auth.sql"), "utf8");
+    const accountFieldsMigration = readFileSync(join(process.cwd(), "db", "migrations", "202608020003_account_fields_and_otp.sql"), "utf8");
     const migrateScript = readFileSync(join(process.cwd(), "scripts", "migrate.mjs"), "utf8");
 
     expect(migrationSource).toContain("create table if not exists public.app_users");
     expect(migrationSource).toContain("create table if not exists public.app_sessions");
     expect(migrationSource).toContain("create table if not exists public.workspace_snapshots");
+    expect(accountFieldsMigration).toContain("fal_license");
+    expect(accountFieldsMigration).toContain("username");
+    expect(accountFieldsMigration).toContain("phone");
     expect(migrationSource).not.toContain("auth.uid()");
     expect(migrateScript).toContain("202608020001_server_auth.sql");
+    expect(migrateScript).toContain("202608020003_account_fields_and_otp.sql");
   });
 
   it("implements public share snapshots with revocable /s token links", () => {
@@ -96,5 +101,18 @@ describe("map page source", () => {
     expect(migrationSource).toContain("create table if not exists public.share_snapshots");
     expect(migrationSource).toContain("revoked_at");
     expect(migrateScript).toContain("202608020002_share_snapshots.sql");
+  });
+
+  it("supports OTP email activation and password recovery UI", () => {
+    const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
+    const confirmRoute = readFileSync(join(process.cwd(), "app", "api", "auth", "confirm-email", "route.ts"), "utf8");
+    const resetRoute = readFileSync(join(process.cwd(), "app", "api", "auth", "reset-password", "route.ts"), "utf8");
+
+    expect(pageSource).toContain("رقم الجوال");
+    expect(pageSource).toContain("رقم رخصة فال");
+    expect(pageSource).toContain("رمز OTP");
+    expect(pageSource).toContain("استعادة كلمة المرور");
+    expect(confirmRoute).toContain("email_confirm");
+    expect(resetRoute).toContain("password_reset");
   });
 });

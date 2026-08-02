@@ -7,9 +7,13 @@ import { verifyPassword } from "@/lib/passwords";
 export const runtime = "nodejs";
 
 const schema = z.object({
-  email: z.string().trim().email(),
+  identifier: z.string().trim().min(1),
   password: z.string().min(1),
 });
+
+function normalizePhone(value: string) {
+  return value.replace(/[^\d]/g, "").replace(/^0/, "966");
+}
 
 export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json().catch(() => null));
@@ -17,9 +21,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "أدخل البريد وكلمة المرور." }, { status: 400 });
   }
 
-  const result = await getDb().query("select id, email, name, role, timezone, password_hash, email_confirmed_at from app_users where lower(email) = lower($1) limit 1", [
-    parsed.data.email,
-  ]);
+  const identifier = parsed.data.identifier.trim();
+  const phone = normalizePhone(identifier);
+  const result = await getDb().query(
+    `
+      select id, email, username, phone, name, role, timezone, fal_license, password_hash, email_confirmed_at
+      from app_users
+      where lower(email) = lower($1)
+        or lower(username) = lower($1)
+        or phone = $2
+      limit 1
+    `,
+    [identifier, phone],
+  );
   const row = result.rows[0];
   if (!row || !(await verifyPassword(parsed.data.password, String(row.password_hash)))) {
     return NextResponse.json({ error: "تعذر تسجيل الدخول. تأكد من البريد وكلمة المرور." }, { status: 401 });
@@ -34,9 +48,12 @@ export async function POST(request: Request) {
     user: {
       id: String(row.id),
       email: String(row.email),
+      username: String(row.username || row.phone || row.email),
+      phone: String(row.phone || ""),
       name: String(row.name || "وسيط عقاري"),
       role: row.role === "admin" ? "admin" : "broker",
       timezone: String(row.timezone || "Asia/Riyadh"),
+      falLicense: String(row.fal_license || ""),
       emailConfirmed: Boolean(row.email_confirmed_at),
     },
     message: "تم تسجيل الدخول بنجاح.",
