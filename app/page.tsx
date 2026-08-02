@@ -1901,8 +1901,18 @@ export default function Home() {
   }
 
   function renderAuthControls() {
+    const visibleAuthMode = authMode === "register" || authMode === "confirm" ? "register" : "login";
+    const authTitle =
+      authMode === "register"
+        ? "تسجيل جديد"
+        : authMode === "confirm"
+          ? "تأكيد البريد"
+          : authMode === "forgot" || authMode === "reset"
+            ? "استعادة كلمة المرور"
+            : "تسجيل الدخول";
+
     return (
-      <Panel title="الدخول والتسجيل وتأكيد البريد">
+      <Panel title={authTitle}>
         <div className="grid gap-3">
           {authUser ? (
             <div className="grid gap-3">
@@ -1913,27 +1923,36 @@ export default function Home() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-5 gap-2 rounded-lg bg-slate-100 p-1 text-sm font-bold">
+              <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1 text-sm font-black">
                 {[
                   { id: "login", label: "دخول" },
                   { id: "register", label: "تسجيل" },
-                  { id: "confirm", label: "تفعيل OTP" },
-                  { id: "forgot", label: "استعادة كلمة المرور" },
-                  { id: "reset", label: "تغيير المرور" },
                 ].map((item) => (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => setAuthMode(item.id as typeof authMode)}
                     className={[
-                      "rounded-md px-3 py-2 transition",
-                      authMode === item.id ? "bg-white text-teal-800 shadow-sm" : "text-slate-600 hover:bg-white/70",
+                      "rounded-xl px-3 py-3 transition",
+                      visibleAuthMode === item.id ? "bg-white text-teal-800 shadow-sm" : "text-slate-600 hover:bg-white/70",
                     ].join(" ")}
                   >
                     {item.label}
                   </button>
                 ))}
               </div>
+              {authMode === "register" || authMode === "confirm" ? (
+                <div className="rounded-2xl border border-indigo-100 bg-white p-4">
+                  <div className="mb-3 flex items-center justify-between text-sm font-black text-indigo-900">
+                    <span>{authMode === "confirm" ? "خطوة تأكيد البريد" : "بيانات الحساب"}</span>
+                    <span dir="ltr">{authMode === "confirm" ? "2/2" : "1/2"}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <span className={["h-1.5 rounded-full", authMode === "register" || authMode === "confirm" ? "bg-indigo-600" : "bg-slate-200"].join(" ")} />
+                    <span className={["h-1.5 rounded-full", authMode === "confirm" ? "bg-indigo-600" : "bg-slate-200"].join(" ")} />
+                  </div>
+                </div>
+              ) : null}
               <form
                 onSubmit={(event) => {
                   event.preventDefault();
@@ -1954,6 +1973,11 @@ export default function Home() {
                 }}
                 className="grid gap-2"
               >
+                {authMode === "confirm" ? (
+                  <p className="rounded-xl border border-teal-100 bg-teal-50 p-3 text-sm font-bold leading-7 text-teal-900">
+                    أرسلنا رمز OTP إلى بريدك. أدخل الرمز لتفعيل الحساب والدخول مباشرة.
+                  </p>
+                ) : null}
                 {authMode === "register" ? (
                   <>
                     <input
@@ -1993,7 +2017,7 @@ export default function Home() {
                     name="identifier"
                     value={authIdentifier}
                     onChange={(event) => setAuthIdentifier(event.target.value)}
-                    placeholder="اسم المستخدم أو الجوال أو البريد"
+                    placeholder="البريد الإلكتروني / رقم الجوال / اسم المستخدم"
                     className={fieldClass()}
                   />
                 ) : (
@@ -2047,6 +2071,16 @@ export default function Home() {
                           ? "إرسال رمز الاستعادة"
                           : "تغيير كلمة المرور"}
                 </button>
+                {authMode === "login" ? (
+                  <button type="button" onClick={() => setAuthMode("forgot")} className="text-right text-sm font-bold text-slate-600 hover:text-teal-800">
+                    نسيت كلمة المرور؟
+                  </button>
+                ) : null}
+                {authMode === "forgot" || authMode === "reset" ? (
+                  <button type="button" onClick={() => setAuthMode("login")} className="secondary-button justify-center">
+                    العودة لتسجيل الدخول
+                  </button>
+                ) : null}
                 {authMode === "confirm" ? (
                   <button type="button" onClick={() => void resendConfirmationOtp()} className="secondary-button justify-center">
                     إعادة إرسال رمز التفعيل
@@ -2062,6 +2096,8 @@ export default function Home() {
   }
 
   function renderPublicAuthShell() {
+    const visibleAuthMode = authMode === "register" || authMode === "confirm" ? "register" : "login";
+
     return (
       <main className="min-h-screen bg-slate-100 text-slate-950">
         <header className="border-b border-slate-200 bg-white px-4 py-4 lg:px-8">
@@ -2071,10 +2107,10 @@ export default function Home() {
               <h1 className="mt-1 text-2xl font-black">إدارة الوساطة العقارية</h1>
             </div>
             <div className="flex gap-2">
-              <button type="button" onClick={() => setAuthMode("login")} className={authMode === "login" ? "primary-button" : "secondary-button"}>
+              <button type="button" onClick={() => setAuthMode("login")} className={visibleAuthMode === "login" ? "primary-button" : "secondary-button"}>
                 دخول
               </button>
-              <button type="button" onClick={() => setAuthMode("register")} className={authMode === "register" ? "primary-button" : "secondary-button"}>
+              <button type="button" onClick={() => setAuthMode("register")} className={visibleAuthMode === "register" ? "primary-button" : "secondary-button"}>
                 تسجيل
               </button>
             </div>
