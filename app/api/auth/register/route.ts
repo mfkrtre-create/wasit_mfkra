@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb } from "@/lib/db";
+import { assertOtpRecipientAllowed, InvalidProductionEmailError } from "@/lib/email-policy";
 import { hasSmtpConfig } from "@/lib/mailer";
 import { sendEmailConfirmationOtp } from "@/lib/otp";
 import { hashPassword } from "@/lib/passwords";
@@ -31,7 +32,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "أدخل بريداً صحيحاً وكلمة مرور لا تقل عن 8 أحرف." }, { status: 400 });
   }
 
-  const email = parsed.data.email.toLowerCase();
+  let email: string;
+  try {
+    email = assertOtpRecipientAllowed(parsed.data.email);
+  } catch (error) {
+    if (error instanceof InvalidProductionEmailError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    throw error;
+  }
+
   if (!hasSmtpConfig()) {
     return NextResponse.json({ error: "لا يمكن إنشاء الحساب قبل تهيئة البريد لتفعيل OTP." }, { status: 503 });
   }
