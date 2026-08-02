@@ -28,6 +28,10 @@
     "react-hook-form": "latest",
     "zod": "latest"
   },
+  "overrides": {
+    "postcss": "8.5.25",
+    "sharp": "0.35.3"
+  },
   "devDependencies": {
     "@secretlint/secretlint-rule-preset-recommend": "^13.0.4",
     "@tailwindcss/postcss": "latest",
