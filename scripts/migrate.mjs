@@ -29,7 +29,7 @@ async function loadEnvFile(filename) {
 await loadEnvFile(".env.local");
 await loadEnvFile(".env.production");
 
-const migrations = ["202608020001_server_auth.sql"];
+const migrations = ["202608020001_server_auth.sql", "202608020002_share_snapshots.sql"];
 const databaseUrl = process.env.DATABASE_URL;
 
 if (!databaseUrl) {

@@ -139,6 +139,24 @@ type AuthUser = {
   emailConfirmed: boolean;
 };
 
+type PublicShareLink = {
+  id: string;
+  record_id: string;
+  title: string;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+};
+
+type PublicShareOptions = {
+  includePrice: boolean;
+  includeArea: boolean;
+  includeContact: boolean;
+  includeNotes: boolean;
+  includeMap: boolean;
+  expiresInDays: number | null;
+};
+
 const riyadhTimezone = "Asia/Riyadh";
 
 const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
@@ -429,6 +447,18 @@ export default function Home() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
+  const [publicShareUrl, setPublicShareUrl] = useState("");
+  const [publicShareMessage, setPublicShareMessage] = useState<string | null>(null);
+  const [publicShareBusy, setPublicShareBusy] = useState(false);
+  const [publicShareLinks, setPublicShareLinks] = useState<PublicShareLink[]>([]);
+  const [publicShareOptions, setPublicShareOptions] = useState<PublicShareOptions>({
+    includePrice: true,
+    includeArea: true,
+    includeContact: false,
+    includeNotes: false,
+    includeMap: true,
+    expiresInDays: 30,
+  });
   const [cloudStatus, setCloudStatus] = useState<"local" | "checking" | "synced" | "blocked" | "error">("checking");
   const cloudLoadedRef = useRef(false);
 
@@ -736,6 +766,8 @@ export default function Home() {
     setAuthUser(null);
     setWorkspace(seedState);
     setSelectedShareId("");
+    setPublicShareUrl("");
+    setPublicShareLinks([]);
     setCloudStatus("local");
     cloudLoadedRef.current = false;
     setAuthMessage("تم تسجيل الخروج.");
@@ -996,6 +1028,66 @@ export default function Home() {
     const record = activeRecords.find((item) => item.id === recordId);
     updateRecord(recordId, { sharedAt: nowIso() });
     addNotification("تم تجهيز مشاركة", record ? `تم تسجيل مشاركة ${record.title}.` : "تم تسجيل المشاركة.", "success");
+  }
+
+  async function loadPublicShareLinks() {
+    if (!authUser) {
+      return;
+    }
+
+    const response = await fetch("/api/shares", { cache: "no-store" });
+    const body = (await readJsonResponse<{ shares: PublicShareLink[] }>(response)) as { shares?: PublicShareLink[]; error?: string };
+    if (!response.ok) {
+      setPublicShareMessage(body.error ?? "تعذر تحميل روابط المشاركة.");
+      return;
+    }
+
+    setPublicShareLinks(body.shares ?? []);
+  }
+
+  async function createPublicShareLink() {
+    if (!requireAuthenticatedAction() || !selectedShareRecord) {
+      return;
+    }
+
+    setPublicShareBusy(true);
+    setPublicShareMessage("جاري إنشاء رابط المشاركة...");
+    try {
+      const response = await fetch("/api/shares", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ record: selectedShareRecord, options: publicShareOptions }),
+      });
+      const body = (await readJsonResponse<{ url: string; share: PublicShareLink }>(response)) as {
+        url?: string;
+        share?: PublicShareLink;
+        error?: string;
+      };
+      if (!response.ok || !body.url || !body.share) {
+        throw new Error(body.error ?? "تعذر إنشاء رابط المشاركة.");
+      }
+
+      setPublicShareUrl(body.url);
+      setPublicShareLinks((current) => [body.share as PublicShareLink, ...current]);
+      markShared(selectedShareRecord.id);
+      setPublicShareMessage("تم إنشاء رابط عام آمن لهذا السجل.");
+    } catch (error) {
+      setPublicShareMessage(error instanceof Error ? error.message : "تعذر إنشاء رابط المشاركة.");
+    } finally {
+      setPublicShareBusy(false);
+    }
+  }
+
+  async function revokePublicShareLink(id: string) {
+    const response = await fetch(`/api/shares/${id}`, { method: "PATCH" });
+    const body = (await readJsonResponse<{ share: PublicShareLink }>(response)) as { share?: PublicShareLink; error?: string };
+    if (!response.ok || !body.share) {
+      setPublicShareMessage(body.error ?? "تعذر إلغاء الرابط.");
+      return;
+    }
+
+    setPublicShareLinks((current) => current.map((item) => (item.id === id ? (body.share as PublicShareLink) : item)));
+    setPublicShareMessage("تم إلغاء الرابط.");
   }
 
   function renderMetric(label: string, value: string | number, tone: "teal" | "blue" | "amber" | "slate", icon: LucideIcon) {
@@ -1518,11 +1610,12 @@ export default function Home() {
 
   function renderSharing() {
     const text = selectedShareRecord ? recordShareText(selectedShareRecord) : "";
+    const textWithLink = publicShareUrl ? `${text}\n\nرابط التفاصيل: ${publicShareUrl}` : text;
     const whatsappUrl = selectedShareRecord
-      ? `https://wa.me/?text=${encodeURIComponent(text)}`
+      ? `https://wa.me/?text=${encodeURIComponent(textWithLink)}`
       : "#";
     const xUrl = selectedShareRecord
-      ? `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`
+      ? `https://twitter.com/intent/tweet?text=${encodeURIComponent(textWithLink)}`
       : "#";
 
     return (
@@ -1535,19 +1628,92 @@ export default function Home() {
               </option>
             ))}
           </select>
+          <div className="mt-4 grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <p className="font-black text-slate-950">بيانات الرابط العام</p>
+            <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+              <input
+                type="checkbox"
+                checked={publicShareOptions.includePrice}
+                onChange={(event) => setPublicShareOptions((current) => ({ ...current, includePrice: event.target.checked }))}
+              />
+              إظهار السعر أو الميزانية
+            </label>
+            <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+              <input
+                type="checkbox"
+                checked={publicShareOptions.includeArea}
+                onChange={(event) => setPublicShareOptions((current) => ({ ...current, includeArea: event.target.checked }))}
+              />
+              إظهار المساحة
+            </label>
+            <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+              <input
+                type="checkbox"
+                checked={publicShareOptions.includeContact}
+                onChange={(event) => setPublicShareOptions((current) => ({ ...current, includeContact: event.target.checked }))}
+              />
+              إظهار بيانات التواصل
+            </label>
+            <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+              <input
+                type="checkbox"
+                checked={publicShareOptions.includeNotes}
+                onChange={(event) => setPublicShareOptions((current) => ({ ...current, includeNotes: event.target.checked }))}
+              />
+              إظهار الملاحظات
+            </label>
+            <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+              <input
+                type="checkbox"
+                checked={publicShareOptions.includeMap}
+                onChange={(event) => setPublicShareOptions((current) => ({ ...current, includeMap: event.target.checked }))}
+              />
+              إظهار الموقع على الخريطة إذا توفرت الإحداثيات
+            </label>
+            <select
+              value={publicShareOptions.expiresInDays ?? "never"}
+              onChange={(event) =>
+                setPublicShareOptions((current) => ({
+                  ...current,
+                  expiresInDays: event.target.value === "never" ? null : Number(event.target.value),
+                }))
+              }
+              className={fieldClass()}
+            >
+              <option value="7">صلاحية 7 أيام</option>
+              <option value="30">صلاحية 30 يوم</option>
+              <option value="90">صلاحية 90 يوم</option>
+              <option value="never">بدون انتهاء</option>
+            </select>
+            <button type="button" onClick={createPublicShareLink} disabled={!selectedShareRecord || publicShareBusy} className="primary-button justify-center">
+              <Share2 className="size-4" aria-hidden="true" />
+              {publicShareBusy ? "جاري إنشاء الرابط..." : "إنشاء رابط عام"}
+            </button>
+            {publicShareMessage ? <p className="rounded-md bg-white p-3 text-sm font-bold leading-7 text-slate-700">{publicShareMessage}</p> : null}
+            {publicShareUrl ? (
+              <button
+                type="button"
+                onClick={() => void navigator.clipboard?.writeText(publicShareUrl)}
+                className="secondary-button justify-center break-all"
+              >
+                <ClipboardCopy className="size-4" aria-hidden="true" />
+                نسخ الرابط العام
+              </button>
+            ) : null}
+          </div>
           <div className="mt-4 grid gap-2">
             <a href={whatsappUrl} target="_blank" rel="noreferrer" onClick={() => selectedShareRecord && markShared(selectedShareRecord.id)} className="primary-button justify-center">
               <MessageCircle className="size-4" aria-hidden="true" />
-              فتح واتساب
+              فتح واتساب مع الرابط
             </a>
             <a href={xUrl} target="_blank" rel="noreferrer" onClick={() => selectedShareRecord && markShared(selectedShareRecord.id)} className="secondary-button justify-center">
               <Send className="size-4" aria-hidden="true" />
-              مشاركة عبر X
+              مشاركة عبر X مع الرابط
             </a>
             <button
               type="button"
               onClick={() => {
-                void navigator.clipboard?.writeText(text);
+                void navigator.clipboard?.writeText(textWithLink);
                 if (selectedShareRecord) markShared(selectedShareRecord.id);
               }}
               className="secondary-button justify-center"
@@ -1559,11 +1725,39 @@ export default function Home() {
         </Panel>
         <Panel title="نص المشاركة">
           <pre className="min-h-64 whitespace-pre-wrap rounded-md border border-slate-200 bg-slate-50 p-4 leading-8 text-slate-800">
-            {text || "اختر سجلاً لتجهيز نص المشاركة."}
+            {textWithLink || "اختر سجلاً لتجهيز نص المشاركة."}
           </pre>
-          <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm leading-7 text-amber-950">
-            روابط المشاركة العامة و /s/[token] مؤجلة للمرحلة الثانية إلا إذا أصبحت لازمة لتدفق المشاركة المعتمد.
-          </p>
+          <div className="mt-4 grid gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="font-black text-slate-950">روابط تم إنشاؤها</p>
+              <button type="button" onClick={() => void loadPublicShareLinks()} className="secondary-button">
+                تحديث الروابط
+              </button>
+            </div>
+            {publicShareLinks.length > 0 ? (
+              publicShareLinks.slice(0, 8).map((share) => (
+                <div key={share.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+                  <div>
+                    <p className="font-bold text-slate-900">{share.title}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {share.revoked_at
+                        ? "ملغى"
+                        : share.expires_at
+                          ? `ينتهي في ${formatDateTime(share.expires_at, workspace.profile.timezone)}`
+                          : "بدون انتهاء"}
+                    </p>
+                  </div>
+                  {!share.revoked_at ? (
+                    <button type="button" onClick={() => void revokePublicShareLink(share.id)} className="danger-button">
+                      إلغاء الرابط
+                    </button>
+                  ) : null}
+                </div>
+              ))
+            ) : (
+              <EmptyState label="لم يتم إنشاء روابط عامة بعد." />
+            )}
+          </div>
         </Panel>
       </section>
     );

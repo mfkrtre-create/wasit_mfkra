@@ -80,4 +80,21 @@ describe("map page source", () => {
     expect(migrationSource).not.toContain("auth.uid()");
     expect(migrateScript).toContain("202608020001_server_auth.sql");
   });
+
+  it("implements public share snapshots with revocable /s token links", () => {
+    const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
+    const shareApiSource = readFileSync(join(process.cwd(), "app", "api", "shares", "route.ts"), "utf8");
+    const publicShareSource = readFileSync(join(process.cwd(), "app", "s", "[token]", "page.tsx"), "utf8");
+    const migrationSource = readFileSync(join(process.cwd(), "db", "migrations", "202608020002_share_snapshots.sql"), "utf8");
+    const migrateScript = readFileSync(join(process.cwd(), "scripts", "migrate.mjs"), "utf8");
+
+    expect(pageSource).toContain("إنشاء رابط عام");
+    expect(pageSource).toContain("بيانات الرابط العام");
+    expect(shareApiSource).toContain("share_snapshots");
+    expect(shareApiSource).toContain("/s/");
+    expect(publicShareSource).toContain("مشاركة عقارية من مفكرة الوسيط");
+    expect(migrationSource).toContain("create table if not exists public.share_snapshots");
+    expect(migrationSource).toContain("revoked_at");
+    expect(migrateScript).toContain("202608020002_share_snapshots.sql");
+  });
 });
