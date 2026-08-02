@@ -1,9 +1,33 @@
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import process from "node:process";
 import pg from "pg";
 
 const { Client } = pg;
+
+async function loadEnvFile(filename) {
+  const envPath = join(process.cwd(), filename);
+  if (!existsSync(envPath)) {
+    return;
+  }
+
+  const content = await readFile(envPath, "utf8");
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#") || !trimmed.includes("=")) {
+      continue;
+    }
+
+    const index = trimmed.indexOf("=");
+    const key = trimmed.slice(0, index).trim();
+    const value = trimmed.slice(index + 1).trim().replace(/^["']|["']$/g, "");
+    process.env[key] ??= value;
+  }
+}
+
+await loadEnvFile(".env.local");
+await loadEnvFile(".env.production");
 
 const migrations = ["202608020001_server_auth.sql"];
 const databaseUrl = process.env.DATABASE_URL;
