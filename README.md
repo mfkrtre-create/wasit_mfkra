@@ -24,6 +24,7 @@ npm install
 DATABASE_URL=postgresql://user:password@127.0.0.1:5432/wasit_mfkra
 DATABASE_SSL=false
 APP_URL=http://localhost:3000
+COOKIE_SECURE=false
 GROQ_API_KEY=ضع_مفتاح_Groq_هنا
 GEMINI_API_KEY=ضع_مفتاح_Gemini_هنا
 SMTP_HOST=smtp.gmail.com
