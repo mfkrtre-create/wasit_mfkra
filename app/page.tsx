@@ -297,6 +297,16 @@ function normalizePhone(phone: string) {
   return phone.replace(/[^\d]/g, "").replace(/^0/, "966");
 }
 
+function optionalPositiveNumber(value: FormDataEntryValue | string | null | undefined) {
+  const parsed = Number(value || 0);
+  return parsed > 0 && Number.isFinite(parsed) ? parsed : null;
+}
+
+function optionalInteger(value: FormDataEntryValue | string | null | undefined) {
+  const parsed = Number(value || 0);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 function recordAmount(record: PropertyRecord) {
   return record.kind === "offer" ? record.price : record.budget;
 }
@@ -352,16 +362,23 @@ function normalizeWorkspaceState(state: WorkspaceState): WorkspaceState {
   };
 }
 
-function recordShareText(record: PropertyRecord) {
+function recordShareText(record: PropertyRecord, options?: Partial<PublicShareOptions>) {
   const amount = recordAmount(record);
+  const includePrice = options?.includePrice ?? true;
+  const includeArea = options?.includeArea ?? true;
+  const includeContact = options?.includeContact ?? true;
+  const includeNotes = options?.includeNotes ?? false;
+  const includeMap = options?.includeMap ?? true;
   return [
     `${recordKindLabels[record.kind]}: ${record.title}`,
     `الحالة: ${statusLabels[record.status]}`,
     `الموقع: ${record.city} - ${record.district}`,
     `النوع: ${record.propertyType} | العملية: ${record.transaction}`,
-    amount ? `القيمة: ${formatMoney(amount)}` : null,
-    record.area ? `المساحة: ${record.area} م²` : null,
-    record.contact ? `التواصل: ${record.contact}` : null,
+    includePrice && amount ? `القيمة: ${formatMoney(amount)}` : null,
+    includeArea && record.area ? `المساحة: ${record.area} م²` : null,
+    includeContact && record.contact ? `التواصل: ${record.contact}` : null,
+    includeNotes && record.notes ? `ملاحظات: ${record.notes}` : null,
+    includeMap && hasUsableCoordinates(record.lat ?? NaN, record.lng ?? NaN) ? `الموقع على الخريطة: https://www.google.com/maps/search/?api=1&query=${record.lat},${record.lng}` : null,
   ]
     .filter(Boolean)
     .join("\n");
@@ -438,6 +455,7 @@ export default function Home() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const [expandedCalculatorRecordId, setExpandedCalculatorRecordId] = useState<string | null>(null);
+  const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [profileSection, setProfileSection] = useState<ProfileSection>("settings");
   const [selectedShareId, setSelectedShareId] = useState("");
   const [hoveredMapId, setHoveredMapId] = useState<string | null>(null);
@@ -445,10 +463,10 @@ export default function Home() {
   const [recordFormVersion, setRecordFormVersion] = useState(0);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
+  const [authPasswordConfirm, setAuthPasswordConfirm] = useState("");
   const [authIdentifier, setAuthIdentifier] = useState("");
   const [authName, setAuthName] = useState("");
   const [authPhone, setAuthPhone] = useState("");
-  const [authUsername, setAuthUsername] = useState("");
   const [authFalLicense, setAuthFalLicense] = useState("");
   const [authOtp, setAuthOtp] = useState("");
   const [authNewPassword, setAuthNewPassword] = useState("");
@@ -660,6 +678,37 @@ export default function Home() {
     }));
   }
 
+  function updateRecordFromForm(recordId: string, formData: FormData) {
+    const priceValue = optionalPositiveNumber(formData.get("price"));
+    const areaValue = optionalPositiveNumber(formData.get("area"));
+    const latitudeValue = Number(formData.get("latitude") || Number.NaN);
+    const longitudeValue = Number(formData.get("longitude") || Number.NaN);
+    const hasCoordinates = hasUsableCoordinates(latitudeValue, longitudeValue);
+    const record = activeRecords.find((item) => item.id === recordId);
+    const kind = record?.kind ?? "offer";
+
+    updateRecord(recordId, {
+      title: String(formData.get("title") || record?.title || "").trim() || record?.title,
+      propertyType: String(formData.get("propertyType") || record?.propertyType || "غير محدد"),
+      transaction: String(formData.get("transaction") || record?.transaction || "غير محدد"),
+      city: String(formData.get("city") || record?.city || "الرياض"),
+      district: String(formData.get("district") || record?.district || "غير محدد"),
+      area: areaValue,
+      price: kind === "offer" ? priceValue : null,
+      budget: kind === "request" ? priceValue : null,
+      streetWidth: optionalPositiveNumber(formData.get("streetWidth")),
+      facade: String(formData.get("facade") || ""),
+      bedrooms: optionalInteger(formData.get("bedrooms")),
+      bathrooms: optionalInteger(formData.get("bathrooms")),
+      contact: String(formData.get("contact") || ""),
+      license: String(formData.get("license") || ""),
+      notes: String(formData.get("notes") || ""),
+      lat: hasCoordinates ? latitudeValue : null,
+      lng: hasCoordinates ? longitudeValue : null,
+    });
+    setEditingRecordId(null);
+  }
+
   function addNotification(title: string, body: string, level: NotificationLevel = "info") {
     if (!authUser || cloudStatus === "blocked") {
       return;
@@ -709,27 +758,31 @@ export default function Home() {
   async function registerWithEmail(formData: FormData) {
     const email = String(formData.get("email") ?? authEmail).trim().toLowerCase();
     const password = String(formData.get("password") ?? authPassword);
+    const passwordConfirm = String(formData.get("passwordConfirm") ?? authPasswordConfirm);
     const name = String(formData.get("name") ?? authName).trim();
     const phone = String(formData.get("phone") ?? authPhone).trim();
-    const username = String(formData.get("username") ?? authUsername).trim();
     const falLicense = String(formData.get("falLicense") ?? authFalLicense).trim();
     if (!name || !phone || !email || password.length < 8) {
       setAuthMessage("أدخل اسم الوسيط والجوال والبريد وكلمة مرور لا تقل عن 8 أحرف.");
       return;
     }
+    if (password !== passwordConfirm) {
+      setAuthMessage("كلمة المرور وتأكيدها غير متطابقين.");
+      return;
+    }
 
     setAuthEmail(email);
     setAuthPassword(password);
+    setAuthPasswordConfirm(passwordConfirm);
     setAuthName(name);
     setAuthPhone(phone);
-    setAuthUsername(username);
     setAuthFalLicense(falLicense);
     setAuthMessage("جاري إنشاء الحساب وإرسال رمز OTP...");
 
     const response = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, name, phone, username, falLicense }),
+      body: JSON.stringify({ email, password, name, phone, falLicense }),
     });
     const body = (await readJsonResponse<{ user: AuthUser | null; message?: string }>(response)) as {
       user: AuthUser | null;
@@ -796,7 +849,7 @@ export default function Home() {
     const identifier = String(formData.get("identifier") ?? authIdentifier).trim();
     const password = String(formData.get("password") ?? authPassword);
     if (!identifier || !password) {
-      setAuthMessage("أدخل اسم المستخدم أو الجوال أو البريد مع كلمة المرور.");
+      setAuthMessage("أدخل رقم الجوال أو البريد مع كلمة المرور.");
       return;
     }
 
@@ -995,6 +1048,17 @@ export default function Home() {
     }
   }
 
+  function updateAiResult(patch: Partial<PropertyData>) {
+    setAiResult((current) => (current ? { ...current, ...patch } : current));
+  }
+
+  function resetAiEntry() {
+    setAiText("");
+    setAiResult(null);
+    setAiSource("ai-text");
+    setAiError(null);
+  }
+
   async function analyzeText(value = aiText) {
     if (!requireAuthenticatedAction()) {
       return;
@@ -1054,6 +1118,11 @@ export default function Home() {
 
   async function startAudioRecording() {
     setAiError(null);
+    const isLocalHost = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+    if (!window.isSecureContext && !isLocalHost) {
+      setAiError("تسجيل الصوت يحتاج HTTPS حتى يسمح المتصفح باستخدام الميكروفون. فعّل SSL للدومين أو جرّبه محلياً على localhost.");
+      return;
+    }
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
       setAiError("المتصفح لا يدعم التسجيل الصوتي المباشر. جرّب Chrome أو Edge محدثاً.");
       return;
@@ -1111,6 +1180,7 @@ export default function Home() {
     setSelectedShareId(record.id);
     setView(record.kind === "offer" ? "offers" : "requests");
     addNotification("تم حفظ إدخال AI", `تم تحويل النص إلى ${recordKindLabels[record.kind]} قابل للمراجعة.`, "success");
+    resetAiEntry();
   }
 
   function markShared(recordId: string) {
@@ -1169,6 +1239,12 @@ export default function Home() {
     } finally {
       setPublicShareBusy(false);
     }
+  }
+
+  function updatePublicShareOptions(patch: Partial<PublicShareOptions>) {
+    setPublicShareOptions((current) => ({ ...current, ...patch }));
+    setPublicShareUrl("");
+    setPublicShareMessage("تم تحديث خيارات المشاركة. أنشئ رابطاً جديداً لتطبيقها على الرابط العام.");
   }
 
   async function revokePublicShareLink(id: string) {
@@ -1270,6 +1346,14 @@ export default function Home() {
             <Share2 className="size-4" aria-hidden="true" />
             مشاركة
           </button>
+          <button
+            type="button"
+            onClick={() => setEditingRecordId((current) => (current === record.id ? null : record.id))}
+            className="action-button"
+          >
+            <WandSparkles className="size-4" aria-hidden="true" />
+            تعديل
+          </button>
           {record.kind === "offer" && view === "offers" ? (
             <button
               type="button"
@@ -1296,6 +1380,39 @@ export default function Home() {
             حذف
           </button>
         </div>
+        {editingRecordId === record.id ? (
+          <form
+            className="mt-4 grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 md:grid-cols-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              updateRecordFromForm(record.id, new FormData(event.currentTarget));
+            }}
+          >
+            <input name="title" defaultValue={record.title} placeholder="العنوان" className={fieldClass()} />
+            <input name="city" defaultValue={record.city} placeholder="المدينة" className={fieldClass()} />
+            <input name="district" defaultValue={record.district} placeholder="الحي" className={fieldClass()} />
+            <input name="propertyType" defaultValue={record.propertyType} placeholder="نوع العقار" className={fieldClass()} />
+            <input name="transaction" defaultValue={record.transaction} placeholder="نوع العملية" className={fieldClass()} />
+            <input name="price" type="number" min="0" defaultValue={recordAmount(record) ?? ""} placeholder={record.kind === "offer" ? "السعر" : "الميزانية"} className={fieldClass()} />
+            <input name="area" type="number" min="0" defaultValue={record.area ?? ""} placeholder="المساحة" className={fieldClass()} />
+            <input name="streetWidth" type="number" min="0" defaultValue={record.streetWidth ?? ""} placeholder="عرض الشارع" className={fieldClass()} />
+            <input name="facade" defaultValue={record.facade} placeholder="الواجهة" className={fieldClass()} />
+            <input name="bedrooms" type="number" min="0" defaultValue={record.bedrooms ?? ""} placeholder="غرف النوم" className={fieldClass()} />
+            <input name="bathrooms" type="number" min="0" defaultValue={record.bathrooms ?? ""} placeholder="دورات المياه" className={fieldClass()} />
+            <input name="contact" defaultValue={record.contact} placeholder="رقم التواصل" className={fieldClass()} />
+            <input name="license" defaultValue={record.license} placeholder="رقم الإعلان العقاري" className={fieldClass()} />
+            <textarea name="notes" rows={4} defaultValue={record.notes} placeholder="نص الإعلان/الملاحظات" className={`${fieldClass()} h-auto py-3 leading-8 md:col-span-3`} />
+            <LocationPicker key={`edit-${record.id}-${record.updatedAt}`} initialLatitude={record.lat} initialLongitude={record.lng} />
+            <div className="flex flex-wrap justify-end gap-2 md:col-span-3">
+              <button type="button" onClick={() => setEditingRecordId(null)} className="secondary-button">
+                إلغاء
+              </button>
+              <button type="submit" className="primary-button">
+                حفظ التعديل
+              </button>
+            </div>
+          </form>
+        ) : null}
         {record.kind === "offer" && view === "offers" && expandedCalculatorRecordId === record.id ? renderOfferCalculator(record) : null}
       </article>
     );
@@ -1484,15 +1601,87 @@ export default function Home() {
           <h2 className="mb-4 text-lg font-black text-slate-950">نتيجة المراجعة قبل الحفظ</h2>
           {aiResult ? (
             <div className="grid gap-3">
+              <p className="rounded-md border border-teal-100 bg-teal-50 p-3 text-sm font-bold leading-7 text-teal-900">
+                راجع وعدّل البيانات قبل الحفظ. رقم الجوال/الرخصة/الموقع يمكن تعديلها هنا أو بعد الحفظ من بطاقة الإعلان.
+              </p>
               <div className="grid gap-3 md:grid-cols-2">
-                <Info label="نوع السجل" value={recordKindLabels[aiResult.recordType]} />
-                <Info label="نوع العملية" value={aiResult.transactionType ? transactionLabels[aiResult.transactionType] : "غير محدد"} />
-                <Info label="نوع العقار" value={aiResult.propertyType ? propertyTypeLabels[aiResult.propertyType] : "غير محدد"} />
-                <Info label="المدينة" value={aiResult.city ?? "غير محدد"} />
-                <Info label="الأحياء" value={aiResult.districts.join("، ") || "غير محدد"} />
-                <Info label="القيمة" value={formatMoney(aiResult.price ?? aiResult.maximumBudget)} />
+                <select
+                  value={aiResult.recordType}
+                  onChange={(event) => updateAiResult({ recordType: event.target.value as PropertyData["recordType"] })}
+                  className={fieldClass()}
+                >
+                  <option value="offer">عرض</option>
+                  <option value="request">طلب</option>
+                </select>
+                <select
+                  value={aiResult.transactionType ?? ""}
+                  onChange={(event) => updateAiResult({ transactionType: (event.target.value || null) as PropertyData["transactionType"] })}
+                  className={fieldClass()}
+                >
+                  <option value="">نوع العملية</option>
+                  {Object.entries(transactionLabels)
+                    .filter(([value]) => value !== "unknown")
+                    .map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                </select>
+                <select
+                  value={aiResult.propertyType ?? ""}
+                  onChange={(event) => updateAiResult({ propertyType: (event.target.value || null) as PropertyData["propertyType"] })}
+                  className={fieldClass()}
+                >
+                  <option value="">نوع العقار</option>
+                  {Object.entries(propertyTypeLabels)
+                    .filter(([value]) => value !== "unknown")
+                    .map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                </select>
+                <input value={aiResult.city ?? ""} onChange={(event) => updateAiResult({ city: event.target.value || null })} placeholder="المدينة" className={fieldClass()} />
+                <input
+                  value={aiResult.districts.join("، ")}
+                  onChange={(event) =>
+                    updateAiResult({
+                      districts: event.target.value
+                        .split(/[,،]/)
+                        .map((item) => item.trim())
+                        .filter(Boolean),
+                    })
+                  }
+                  placeholder="الأحياء"
+                  className={fieldClass()}
+                />
+                <input
+                  type="number"
+                  min="0"
+                  value={aiResult.recordType === "offer" ? aiResult.price ?? "" : aiResult.maximumBudget ?? ""}
+                  onChange={(event) =>
+                    updateAiResult(
+                      aiResult.recordType === "offer"
+                        ? { price: optionalPositiveNumber(event.target.value) }
+                        : { maximumBudget: optionalPositiveNumber(event.target.value) },
+                    )
+                  }
+                  placeholder={aiResult.recordType === "offer" ? "السعر" : "الميزانية"}
+                  className={fieldClass()}
+                />
+                <input type="number" min="0" value={aiResult.area ?? ""} onChange={(event) => updateAiResult({ area: optionalPositiveNumber(event.target.value) })} placeholder="المساحة" className={fieldClass()} />
+                <input type="number" min="0" value={aiResult.streetWidth ?? ""} onChange={(event) => updateAiResult({ streetWidth: optionalPositiveNumber(event.target.value) })} placeholder="عرض الشارع" className={fieldClass()} />
+                <input value={aiResult.facade ?? ""} onChange={(event) => updateAiResult({ facade: event.target.value || null })} placeholder="الواجهة" className={fieldClass()} />
+                <input value={aiResult.contactNumber ?? ""} onChange={(event) => updateAiResult({ contactNumber: event.target.value || null })} placeholder="رقم التواصل" className={fieldClass()} />
+                <input value={aiResult.licenseNumber ?? ""} onChange={(event) => updateAiResult({ licenseNumber: event.target.value || null })} placeholder="رقم الإعلان العقاري" className={fieldClass()} />
               </div>
-              <Info label="الوصف" value={aiResult.description ?? "غير محدد"} />
+              <textarea
+                value={aiResult.description ?? ""}
+                onChange={(event) => updateAiResult({ description: event.target.value || null })}
+                rows={5}
+                placeholder="نص الإعلان بعد إعادة الصياغة"
+                className={`${fieldClass()} h-auto py-3 leading-8`}
+              />
               <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
                 الحقول الناقصة: {aiResult.missingFields.join("، ") || "لا توجد"}
               </div>
@@ -1702,7 +1891,7 @@ export default function Home() {
   }
 
   function renderSharing() {
-    const text = selectedShareRecord ? recordShareText(selectedShareRecord) : "";
+    const text = selectedShareRecord ? recordShareText(selectedShareRecord, publicShareOptions) : "";
     const textWithLink = publicShareUrl ? `${text}\n\nرابط التفاصيل: ${publicShareUrl}` : text;
     const whatsappUrl = selectedShareRecord
       ? `https://wa.me/?text=${encodeURIComponent(textWithLink)}`
@@ -1727,7 +1916,7 @@ export default function Home() {
               <input
                 type="checkbox"
                 checked={publicShareOptions.includePrice}
-                onChange={(event) => setPublicShareOptions((current) => ({ ...current, includePrice: event.target.checked }))}
+                onChange={(event) => updatePublicShareOptions({ includePrice: event.target.checked })}
               />
               إظهار السعر أو الميزانية
             </label>
@@ -1735,7 +1924,7 @@ export default function Home() {
               <input
                 type="checkbox"
                 checked={publicShareOptions.includeArea}
-                onChange={(event) => setPublicShareOptions((current) => ({ ...current, includeArea: event.target.checked }))}
+                onChange={(event) => updatePublicShareOptions({ includeArea: event.target.checked })}
               />
               إظهار المساحة
             </label>
@@ -1743,7 +1932,7 @@ export default function Home() {
               <input
                 type="checkbox"
                 checked={publicShareOptions.includeContact}
-                onChange={(event) => setPublicShareOptions((current) => ({ ...current, includeContact: event.target.checked }))}
+                onChange={(event) => updatePublicShareOptions({ includeContact: event.target.checked })}
               />
               إظهار بيانات التواصل
             </label>
@@ -1751,7 +1940,7 @@ export default function Home() {
               <input
                 type="checkbox"
                 checked={publicShareOptions.includeNotes}
-                onChange={(event) => setPublicShareOptions((current) => ({ ...current, includeNotes: event.target.checked }))}
+                onChange={(event) => updatePublicShareOptions({ includeNotes: event.target.checked })}
               />
               إظهار الملاحظات
             </label>
@@ -1759,17 +1948,14 @@ export default function Home() {
               <input
                 type="checkbox"
                 checked={publicShareOptions.includeMap}
-                onChange={(event) => setPublicShareOptions((current) => ({ ...current, includeMap: event.target.checked }))}
+                onChange={(event) => updatePublicShareOptions({ includeMap: event.target.checked })}
               />
               إظهار الموقع على الخريطة إذا توفرت الإحداثيات
             </label>
             <select
               value={publicShareOptions.expiresInDays ?? "never"}
               onChange={(event) =>
-                setPublicShareOptions((current) => ({
-                  ...current,
-                  expiresInDays: event.target.value === "never" ? null : Number(event.target.value),
-                }))
+                updatePublicShareOptions({ expiresInDays: event.target.value === "never" ? null : Number(event.target.value) })
               }
               className={fieldClass()}
             >
@@ -1997,13 +2183,6 @@ export default function Home() {
                       className={fieldClass()}
                     />
                     <input
-                      name="username"
-                      value={authUsername}
-                      onChange={(event) => setAuthUsername(event.target.value)}
-                      placeholder="اسم مستخدم اختياري - إذا تركته يستخدم رقم الجوال"
-                      className={fieldClass()}
-                    />
-                    <input
                       name="falLicense"
                       value={authFalLicense}
                       onChange={(event) => setAuthFalLicense(event.target.value)}
@@ -2017,7 +2196,7 @@ export default function Home() {
                     name="identifier"
                     value={authIdentifier}
                     onChange={(event) => setAuthIdentifier(event.target.value)}
-                    placeholder="البريد الإلكتروني / رقم الجوال / اسم المستخدم"
+                    placeholder="البريد الإلكتروني / رقم الجوال"
                     className={fieldClass()}
                   />
                 ) : (
@@ -2047,6 +2226,16 @@ export default function Home() {
                     value={authPassword}
                     onChange={(event) => setAuthPassword(event.target.value)}
                     placeholder="كلمة المرور"
+                    className={fieldClass()}
+                  />
+                ) : null}
+                {authMode === "register" ? (
+                  <input
+                    name="passwordConfirm"
+                    type="password"
+                    value={authPasswordConfirm}
+                    onChange={(event) => setAuthPasswordConfirm(event.target.value)}
+                    placeholder="تأكيد كلمة المرور"
                     className={fieldClass()}
                   />
                 ) : null}
@@ -2156,7 +2345,7 @@ export default function Home() {
             <div className="grid gap-3">
               <Info label="المستخدم" value={workspace.profile.name} />
               <Info label="الجوال" value={authUser?.phone ?? ""} />
-              <Info label="اسم المستخدم" value={authUser?.username ?? ""} />
+              <Info label="رقم الجوال للدخول" value={authUser?.phone || authUser?.username || ""} />
               <Info label="رخصة فال" value={authUser?.falLicense || "غير مضافة"} />
               <Info label="الدور" value={workspace.profile.role === "admin" ? "مدير" : "وسيط"} />
               <Info label="المنطقة الزمنية" value={workspace.profile.timezone} />

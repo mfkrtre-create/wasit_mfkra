@@ -13,17 +13,11 @@ const schema = z.object({
   password: z.string().min(8),
   name: z.string().trim().min(1).max(120),
   phone: z.string().trim().min(7).max(32),
-  username: z.string().trim().min(3).max(40).optional().or(z.literal("")),
   falLicense: z.string().trim().max(80).optional().or(z.literal("")),
 });
 
 function normalizePhone(phone: string) {
   return phone.replace(/[^\d]/g, "").replace(/^0/, "966");
-}
-
-function normalizeUsername(username: string, phone: string) {
-  const clean = username.trim().toLowerCase().replace(/[^a-z0-9_.-]/g, "");
-  return clean || phone;
 }
 
 export async function POST(request: Request) {
@@ -48,7 +42,7 @@ export async function POST(request: Request) {
 
   const passwordHash = await hashPassword(parsed.data.password);
   const phone = normalizePhone(parsed.data.phone);
-  const username = normalizeUsername(parsed.data.username ?? "", phone);
+  const username = phone;
   const result = await getDb()
     .query(
       `

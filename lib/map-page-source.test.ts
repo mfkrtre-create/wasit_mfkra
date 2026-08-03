@@ -103,13 +103,31 @@ describe("map page source", () => {
     expect(migrateScript).toContain("202608020002_share_snapshots.sql");
   });
 
+  it("lets brokers edit AI results, saved records, and share text options", () => {
+    const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
+    const extractRoute = readFileSync(join(process.cwd(), "app", "api", "extract-property", "route.ts"), "utf8");
+
+    expect(pageSource).toContain("updateAiResult");
+    expect(pageSource).toContain("راجع وعدّل البيانات قبل الحفظ");
+    expect(pageSource).toContain("updateRecordFromForm");
+    expect(pageSource).toContain("حفظ التعديل");
+    expect(pageSource).toContain("resetAiEntry()");
+    expect(pageSource).toContain("recordShareText(selectedShareRecord, publicShareOptions)");
+    expect(pageSource).toContain("updatePublicShareOptions");
+    expect(extractRoute).toContain("For short WhatsApp messages");
+  });
+
   it("supports OTP email activation and password recovery UI", () => {
     const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
+    const registerRoute = readFileSync(join(process.cwd(), "app", "api", "auth", "register", "route.ts"), "utf8");
     const confirmRoute = readFileSync(join(process.cwd(), "app", "api", "auth", "confirm-email", "route.ts"), "utf8");
     const resetRoute = readFileSync(join(process.cwd(), "app", "api", "auth", "reset-password", "route.ts"), "utf8");
 
     expect(pageSource).toContain("رقم الجوال");
     expect(pageSource).toContain("رقم رخصة فال");
+    expect(pageSource).toContain("تأكيد كلمة المرور");
+    expect(pageSource).not.toContain("اسم مستخدم اختياري");
+    expect(registerRoute).toContain("const username = phone");
     expect(pageSource).toContain("رمز OTP");
     expect(pageSource).toContain("استعادة كلمة المرور");
     expect(confirmRoute).toContain("email_confirm");
