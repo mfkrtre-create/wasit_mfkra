@@ -10,6 +10,7 @@ import {
   CircleDollarSign,
   ClipboardCopy,
   Filter,
+  History,
   LayoutDashboard,
   MapPinned,
   MessageCircle,
@@ -25,6 +26,7 @@ import {
   UserPlus,
   Users,
   WandSparkles,
+  X,
   XCircle,
   type LucideIcon,
 } from "lucide-react";
@@ -57,6 +59,7 @@ type BrokerProfile = {
   timezone: string;
   inviteOnly: boolean;
   smtpReady: boolean;
+  defaultReminderDays: number;
 };
 
 type PropertyRecord = {
@@ -70,14 +73,27 @@ type PropertyRecord = {
   district: string;
   area: number | null;
   price: number | null;
+  askingPrice: number | null;
   budget: number | null;
+  category: string;
+  propertyAge: string;
+  basePriceMode: "limit" | "asking";
   streetWidth: number | null;
   facade: string;
+  facades: string[];
+  lengths: string;
+  planNumber: string;
+  blockNumber: string;
+  plotNumber: string;
   bedrooms: number | null;
   bathrooms: number | null;
   clientId: string;
+  ownerName: string;
+  ownerPhone: string;
+  falLicense: string;
   contact: string;
   license: string;
+  reminderDays: number;
   notes: string;
   tags: string[];
   source: "manual" | "ai-text" | "ai-voice";
@@ -116,12 +132,23 @@ type NotificationItem = {
   read: boolean;
 };
 
+type ActivityEvent = {
+  id: string;
+  type: "record_created" | "record_updated" | "share_sent" | "reminder_created" | "client_created";
+  title: string;
+  details: string;
+  recordId: string | null;
+  clientId: string | null;
+  createdAt: string;
+};
+
 type WorkspaceState = {
   profile: BrokerProfile;
   records: PropertyRecord[];
   clients: ClientRecord[];
   reminders: Reminder[];
   notifications: NotificationItem[];
+  activities: ActivityEvent[];
 };
 
 type FilterState = {
@@ -153,6 +180,7 @@ type PublicShareLink = {
 
 type PublicShareOptions = {
   includePrice: boolean;
+  includeAskingPrice: boolean;
   includeArea: boolean;
   includeContact: boolean;
   includeNotes: boolean;
@@ -258,11 +286,13 @@ const seedState: WorkspaceState = {
     timezone: riyadhTimezone,
     inviteOnly: false,
     smtpReady: false,
+    defaultReminderDays: 14,
   },
   clients: [],
   records: [],
   reminders: [],
   notifications: [],
+  activities: [],
 };
 
 function nowIso() {
@@ -311,6 +341,19 @@ function recordAmount(record: PropertyRecord) {
   return record.kind === "offer" ? record.price : record.budget;
 }
 
+function recordBasePrice(record: PropertyRecord) {
+  if (record.kind !== "offer") {
+    return record.budget;
+  }
+
+  return record.basePriceMode === "asking" && record.askingPrice ? record.askingPrice : record.price;
+}
+
+function recordPricePerMeter(record: PropertyRecord) {
+  const basePrice = recordBasePrice(record);
+  return basePrice && record.area ? basePrice / record.area : null;
+}
+
 function defaultStatusForRecord(kind: RecordKind, transaction = ""): RecordStatus {
   const normalizedTransaction = transaction.trim().toLowerCase();
   const isRent =
@@ -354,17 +397,36 @@ function normalizeWorkspaceState(state: WorkspaceState): WorkspaceState {
       ...state.profile,
       timezone: state.profile?.timezone || riyadhTimezone,
       inviteOnly: false,
+      defaultReminderDays: Number(state.profile?.defaultReminderDays) > 0 ? Number(state.profile.defaultReminderDays) : 14,
     },
     records: state.records.map((record) => ({
       ...record,
       status: normalizeRecordStatus(record.kind, String(record.status), record.transaction),
+      askingPrice: record.askingPrice ?? null,
+      category: record.category ?? "",
+      propertyAge: record.propertyAge ?? "",
+      basePriceMode: record.basePriceMode === "asking" ? "asking" : "limit",
+      facades: Array.isArray(record.facades) ? record.facades : record.facade ? [record.facade] : [],
+      lengths: record.lengths ?? "",
+      planNumber: record.planNumber ?? "",
+      blockNumber: record.blockNumber ?? "",
+      plotNumber: record.plotNumber ?? "",
+      ownerName: record.ownerName ?? "",
+      ownerPhone: record.ownerPhone ?? record.contact ?? "",
+      falLicense: record.falLicense ?? "",
+      reminderDays: Number(record.reminderDays) > 0 ? Number(record.reminderDays) : 14,
     })),
+    clients: Array.isArray(state.clients) ? state.clients : [],
+    reminders: Array.isArray(state.reminders) ? state.reminders : [],
+    notifications: Array.isArray(state.notifications) ? state.notifications : [],
+    activities: Array.isArray(state.activities) ? state.activities : [],
   };
 }
 
 function recordShareText(record: PropertyRecord, options?: Partial<PublicShareOptions>) {
   const amount = recordAmount(record);
   const includePrice = options?.includePrice ?? true;
+  const includeAskingPrice = options?.includeAskingPrice ?? true;
   const includeArea = options?.includeArea ?? true;
   const includeContact = options?.includeContact ?? true;
   const includeNotes = options?.includeNotes ?? false;
@@ -375,6 +437,7 @@ function recordShareText(record: PropertyRecord, options?: Partial<PublicShareOp
     `الموقع: ${record.city} - ${record.district}`,
     `النوع: ${record.propertyType} | العملية: ${record.transaction}`,
     includePrice && amount ? `القيمة: ${formatMoney(amount)}` : null,
+    includeAskingPrice && record.kind === "offer" && record.askingPrice ? `السوم: ${formatMoney(record.askingPrice)}` : null,
     includeArea && record.area ? `المساحة: ${record.area} م²` : null,
     includeContact && record.contact ? `التواصل: ${record.contact}` : null,
     includeNotes && record.notes ? `ملاحظات: ${record.notes}` : null,
@@ -403,14 +466,27 @@ function mapAiToRecord(data: PropertyData, source: "ai-text" | "ai-voice", clien
     district,
     area: data.area,
     price: data.price,
+    askingPrice: null,
     budget: data.maximumBudget,
+    category: "",
+    propertyAge: "",
+    basePriceMode: "limit",
     streetWidth: data.streetWidth,
     facade: data.facade ?? "",
+    facades: data.facade ? [data.facade] : [],
+    lengths: "",
+    planNumber: "",
+    blockNumber: "",
+    plotNumber: "",
     bedrooms: data.bedrooms ?? data.minimumBedrooms,
     bathrooms: data.bathrooms,
     clientId,
+    ownerName: "",
+    ownerPhone: data.contactNumber ?? "",
+    falLicense: "",
     contact: data.contactNumber ?? "",
     license: data.licenseNumber ?? "",
+    reminderDays: 14,
     notes: data.description ?? "",
     tags: data.missingFields.length > 0 ? ["يحتاج مراجعة"] : ["مدخل AI"],
     source,
@@ -461,6 +537,16 @@ export default function Home() {
   const [hoveredMapId, setHoveredMapId] = useState<string | null>(null);
   const [isMobileMapOpen, setIsMobileMapOpen] = useState(false);
   const [recordFormVersion, setRecordFormVersion] = useState(0);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [quickEntryMode, setQuickEntryMode] = useState<"manual" | "whatsapp" | "voice">("manual");
+  const [quickKind, setQuickKind] = useState<RecordKind>("offer");
+  const [quickLimitPrice, setQuickLimitPrice] = useState("");
+  const [quickAskingPrice, setQuickAskingPrice] = useState("");
+  const [quickArea, setQuickArea] = useState("");
+  const [quickBasePriceMode, setQuickBasePriceMode] = useState<"limit" | "asking">("limit");
+  const [quickFacades, setQuickFacades] = useState<string[]>([]);
+  const [expandedClientId, setExpandedClientId] = useState<string | null>(null);
+  const [clockNow, setClockNow] = useState(0);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authPasswordConfirm, setAuthPasswordConfirm] = useState("");
@@ -480,6 +566,7 @@ export default function Home() {
   const [publicShareLinks, setPublicShareLinks] = useState<PublicShareLink[]>([]);
   const [publicShareOptions, setPublicShareOptions] = useState<PublicShareOptions>({
     includePrice: true,
+    includeAskingPrice: true,
     includeArea: true,
     includeContact: false,
     includeNotes: false,
@@ -528,6 +615,13 @@ export default function Home() {
         recorder.stop();
       }
     };
+  }, []);
+
+  useEffect(() => {
+    const updateClock = () => setClockNow(Date.now());
+    updateClock();
+    const timer = window.setInterval(updateClock, 60_000);
+    return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -626,7 +720,9 @@ export default function Home() {
   const requests = useMemo(() => activeRecords.filter((record) => record.kind === "request"), [activeRecords]);
   const cities = useMemo(() => Array.from(new Set(activeRecords.map((record) => record.city))).filter(Boolean), [activeRecords]);
   const unreadNotifications = workspace.notifications.filter((notification) => !notification.read).length;
-  const dueReminders = workspace.reminders.filter((reminder) => reminder.status === "due").length;
+  const dueReminders = workspace.reminders.filter(
+    (reminder) => reminder.status === "due" || (reminder.status === "scheduled" && clockNow > 0 && new Date(reminder.dueAt).getTime() <= clockNow),
+  ).length;
   const selectedShareRecord = activeRecords.find((record) => record.id === selectedShareId) ?? activeRecords[0] ?? null;
 
   function toMapRecord(record: PropertyRecord): MapRecord {
@@ -670,16 +766,33 @@ export default function Home() {
       return;
     }
 
-    setWorkspace((current) => ({
-      ...current,
-      records: current.records.map((record) =>
-        record.id === recordId ? { ...record, ...patch, updatedAt: nowIso() } : record,
-      ),
-    }));
+    setWorkspace((current) => {
+      const record = current.records.find((item) => item.id === recordId);
+      const updatedAt = nowIso();
+      return {
+        ...current,
+        records: current.records.map((item) => (item.id === recordId ? { ...item, ...patch, updatedAt } : item)),
+        activities: record
+          ? [
+              {
+                id: makeId("activity"),
+                type: "record_updated" as const,
+                title: "تحديث سجل عقاري",
+                details: record.title,
+                recordId,
+                clientId: record.clientId || null,
+                createdAt: updatedAt,
+              },
+              ...current.activities,
+            ].slice(0, 200)
+          : current.activities,
+      };
+    });
   }
 
   function updateRecordFromForm(recordId: string, formData: FormData) {
     const priceValue = optionalPositiveNumber(formData.get("price"));
+    const askingPriceValue = optionalPositiveNumber(formData.get("askingPrice"));
     const areaValue = optionalPositiveNumber(formData.get("area"));
     const latitudeValue = Number(formData.get("latitude") || Number.NaN);
     const longitudeValue = Number(formData.get("longitude") || Number.NaN);
@@ -695,13 +808,26 @@ export default function Home() {
       district: String(formData.get("district") || record?.district || "غير محدد"),
       area: areaValue,
       price: kind === "offer" ? priceValue : null,
+      askingPrice: kind === "offer" ? askingPriceValue : null,
       budget: kind === "request" ? priceValue : null,
+      category: String(formData.get("category") || ""),
+      propertyAge: String(formData.get("propertyAge") || ""),
+      basePriceMode: formData.get("basePriceMode") === "asking" ? "asking" : "limit",
       streetWidth: optionalPositiveNumber(formData.get("streetWidth")),
-      facade: String(formData.get("facade") || ""),
+      facade: formData.getAll("facades").map(String).join("، ") || String(formData.get("facade") || ""),
+      facades: formData.getAll("facades").map(String),
+      lengths: String(formData.get("lengths") || ""),
+      planNumber: String(formData.get("planNumber") || ""),
+      blockNumber: String(formData.get("blockNumber") || ""),
+      plotNumber: String(formData.get("plotNumber") || ""),
       bedrooms: optionalInteger(formData.get("bedrooms")),
       bathrooms: optionalInteger(formData.get("bathrooms")),
       contact: String(formData.get("contact") || ""),
+      ownerName: String(formData.get("ownerName") || ""),
+      ownerPhone: String(formData.get("ownerPhone") || formData.get("contact") || ""),
+      falLicense: String(formData.get("falLicense") || authUser?.falLicense || ""),
       license: String(formData.get("license") || ""),
+      reminderDays: Number(formData.get("reminderDays") || record?.reminderDays || workspace.profile.defaultReminderDays),
       notes: String(formData.get("notes") || ""),
       lat: hasCoordinates ? latitudeValue : null,
       lng: hasCoordinates ? longitudeValue : null,
@@ -924,47 +1050,120 @@ export default function Home() {
       return;
     }
 
-    const clientId = String(formData.get("clientId") ?? workspace.clients[0]?.id ?? "");
+    const selectedClientId = String(formData.get("clientId") ?? "");
     const title = String(formData.get("title") ?? "").trim();
     const priceValue = Number(formData.get("price") || 0);
+    const askingPriceValue = Number(formData.get("askingPrice") || 0);
     const areaValue = Number(formData.get("area") || 0);
     const latitudeValue = Number(formData.get("latitude") || Number.NaN);
     const longitudeValue = Number(formData.get("longitude") || Number.NaN);
     const hasCoordinates = hasUsableCoordinates(latitudeValue, longitudeValue);
-    const transaction = String(formData.get("transaction") || (kind === "offer" ? "بيع" : "شراء"));
+    const requestedStatus = String(formData.get("status") || "");
+    const defaultTransaction =
+      requestedStatus === "for_rent" || requestedStatus === "rental"
+        ? kind === "offer" ? "إيجار" : "استئجار"
+        : kind === "offer" ? "بيع" : "شراء";
+    const transaction = String(formData.get("transaction") || defaultTransaction);
+    const ownerName = String(formData.get("ownerName") || "").trim();
+    const ownerPhone = normalizePhone(String(formData.get("ownerPhone") || ""));
+    const reminderDays = Number(formData.get("reminderDays") || workspace.profile.defaultReminderDays || 14);
+    const generatedClientId = !selectedClientId && ownerName ? makeId("client") : "";
+    const clientId = selectedClientId || generatedClientId;
+    const createdAt = nowIso();
     const record: PropertyRecord = {
       id: makeId("rec"),
       kind,
       title: title || (kind === "offer" ? "عرض جديد" : "طلب جديد"),
       propertyType: String(formData.get("propertyType") || "غير محدد"),
       transaction,
-      status: defaultStatusForRecord(kind, transaction),
+      status: statusOptionsByKind[kind].some((option) => option.value === requestedStatus)
+        ? (requestedStatus as RecordStatus)
+        : defaultStatusForRecord(kind, transaction),
       city: String(formData.get("city") || "الرياض"),
       district: String(formData.get("district") || "غير محدد"),
       area: areaValue > 0 ? areaValue : null,
       price: kind === "offer" && priceValue > 0 ? priceValue : null,
+      askingPrice: kind === "offer" && askingPriceValue > 0 ? askingPriceValue : null,
       budget: kind === "request" && priceValue > 0 ? priceValue : null,
-      streetWidth: null,
-      facade: "",
+      category: String(formData.get("category") || ""),
+      propertyAge: String(formData.get("propertyAge") || ""),
+      basePriceMode: formData.get("basePriceMode") === "asking" ? "asking" : "limit",
+      streetWidth: optionalPositiveNumber(formData.get("streetWidth")),
+      facade: formData.getAll("facades").map(String).join("، "),
+      facades: formData.getAll("facades").map(String),
+      lengths: String(formData.get("lengths") || ""),
+      planNumber: String(formData.get("planNumber") || ""),
+      blockNumber: String(formData.get("blockNumber") || ""),
+      plotNumber: String(formData.get("plotNumber") || ""),
       bedrooms: null,
       bathrooms: null,
       clientId,
-      contact: workspace.clients.find((client) => client.id === clientId)?.phone ?? "",
-      license: "",
+      ownerName,
+      ownerPhone,
+      falLicense: String(formData.get("falLicense") || authUser?.falLicense || ""),
+      contact: ownerPhone || workspace.clients.find((client) => client.id === clientId)?.phone || "",
+      license: String(formData.get("license") || ""),
+      reminderDays: Number.isFinite(reminderDays) && reminderDays > 0 ? reminderDays : 14,
       notes: String(formData.get("notes") || ""),
       tags: kind === "offer" ? ["عرض يدوي"] : ["طلب يدوي"],
       source: "manual",
       lat: hasCoordinates ? latitudeValue : null,
       lng: hasCoordinates ? longitudeValue : null,
-      createdAt: nowIso(),
-      updatedAt: nowIso(),
+      createdAt,
+      updatedAt: createdAt,
       sharedAt: null,
       deletedAt: null,
     };
 
-    setWorkspace((current) => ({ ...current, records: [record, ...current.records] }));
+    const dueAt = new Date(createdAt);
+    dueAt.setDate(dueAt.getDate() + record.reminderDays);
+    setWorkspace((current) => ({
+      ...current,
+      records: [record, ...current.records],
+      clients: generatedClientId
+        ? [
+            {
+              id: generatedClientId,
+              name: ownerName,
+              phone: ownerPhone,
+              type: kind === "offer" ? "owner" : "buyer",
+              priority: "medium",
+              notes: `أضيف تلقائياً مع ${recordKindLabels[kind]} ${record.title}`,
+              lastContactAt: createdAt,
+            },
+            ...current.clients,
+          ]
+        : current.clients,
+      reminders: [
+        {
+          id: makeId("rem"),
+          recordId: record.id,
+          title: `تحديث ${record.title}`,
+          dueAt: dueAt.toISOString(),
+          status: "scheduled",
+        },
+        ...current.reminders,
+      ],
+      activities: [
+        {
+          id: makeId("activity"),
+          type: "record_created" as const,
+          title: `إضافة ${recordKindLabels[kind]} جديد`,
+          details: record.title,
+          recordId: record.id,
+          clientId: clientId || null,
+          createdAt,
+        },
+        ...current.activities,
+      ].slice(0, 200),
+    }));
     setSelectedShareId(record.id);
     setRecordFormVersion((value) => value + 1);
+    setQuickAddOpen(false);
+    setQuickLimitPrice("");
+    setQuickAskingPrice("");
+    setQuickArea("");
+    setQuickFacades([]);
     addNotification("تم إنشاء سجل", `تم حفظ ${recordKindLabels[kind]}: ${record.title}`, "success");
   }
 
@@ -983,7 +1182,22 @@ export default function Home() {
       lastContactAt: nowIso(),
     };
 
-    setWorkspace((current) => ({ ...current, clients: [client, ...current.clients] }));
+    setWorkspace((current) => ({
+      ...current,
+      clients: [client, ...current.clients],
+      activities: [
+        {
+          id: makeId("activity"),
+          type: "client_created" as const,
+          title: "إضافة عميل",
+          details: client.name,
+          recordId: null,
+          clientId: client.id,
+          createdAt: client.lastContactAt,
+        },
+        ...current.activities,
+      ].slice(0, 200),
+    }));
     addNotification("عميل جديد", `تمت إضافة ${client.name} إلى CRM.`, "success");
   }
 
@@ -998,7 +1212,7 @@ export default function Home() {
     }
 
     const dueAt = new Date();
-    dueAt.setDate(dueAt.getDate() + 14);
+    dueAt.setDate(dueAt.getDate() + record.reminderDays);
     setWorkspace((current) => ({
       ...current,
       reminders: [
@@ -1011,8 +1225,20 @@ export default function Home() {
         },
         ...current.reminders,
       ],
+      activities: [
+        {
+          id: makeId("activity"),
+          type: "reminder_created" as const,
+          title: "إنشاء تذكير",
+          details: record.title,
+          recordId: record.id,
+          clientId: record.clientId || null,
+          createdAt: nowIso(),
+        },
+        ...current.activities,
+      ].slice(0, 200),
     }));
-    addNotification("تم إنشاء تذكير", `موعد المتابعة بعد 14 يوماً حسب توقيت ${workspace.profile.timezone}.`, "success");
+    addNotification("تم إنشاء تذكير", `موعد المتابعة بعد ${record.reminderDays} يوماً حسب توقيت ${workspace.profile.timezone}.`, "success");
   }
 
   function filteredActiveRecords(kind?: RecordKind) {
@@ -1023,12 +1249,13 @@ export default function Home() {
         : filters.status;
 
     return activeRecords.filter((record) => {
+      const clientName = workspace.clients.find((client) => client.id === record.clientId)?.name ?? record.ownerName;
       const matchesKind = kind === undefined || record.kind === kind;
       const matchesStatus = effectiveStatus === "all" || record.status === effectiveStatus;
       const matchesCity = filters.city === "all" || record.city === filters.city;
       const matchesQuery =
         !query ||
-        [record.title, record.city, record.district, record.propertyType, record.transaction, record.notes, record.contact]
+        [record.title, record.city, record.district, record.propertyType, record.transaction, record.notes, record.contact, clientName, record.planNumber, record.plotNumber]
           .join(" ")
           .toLowerCase()
           .includes(query);
@@ -1176,9 +1403,25 @@ export default function Home() {
     }
 
     const record = mapAiToRecord(aiResult, aiSource, workspace.clients);
-    setWorkspace((current) => ({ ...current, records: [record, ...current.records] }));
+    setWorkspace((current) => ({
+      ...current,
+      records: [record, ...current.records],
+      activities: [
+        {
+          id: makeId("activity"),
+          type: "record_created" as const,
+          title: "حفظ إدخال ذكي",
+          details: record.title,
+          recordId: record.id,
+          clientId: record.clientId || null,
+          createdAt: record.createdAt,
+        },
+        ...current.activities,
+      ].slice(0, 200),
+    }));
     setSelectedShareId(record.id);
     setView(record.kind === "offer" ? "offers" : "requests");
+    setQuickAddOpen(false);
     addNotification("تم حفظ إدخال AI", `تم تحويل النص إلى ${recordKindLabels[record.kind]} قابل للمراجعة.`, "success");
     resetAiEntry();
   }
@@ -1190,6 +1433,23 @@ export default function Home() {
 
     const record = activeRecords.find((item) => item.id === recordId);
     updateRecord(recordId, { sharedAt: nowIso() });
+    if (record) {
+      setWorkspace((current) => ({
+        ...current,
+        activities: [
+          {
+            id: makeId("activity"),
+            type: "share_sent" as const,
+            title: "مشاركة سجل عقاري",
+            details: record.title,
+            recordId: record.id,
+            clientId: record.clientId || null,
+            createdAt: nowIso(),
+          },
+          ...current.activities,
+        ].slice(0, 200),
+      }));
+    }
     addNotification("تم تجهيز مشاركة", record ? `تم تسجيل مشاركة ${record.title}.` : "تم تسجيل المشاركة.", "success");
   }
 
@@ -1283,7 +1543,7 @@ export default function Home() {
   }
 
   function renderOfferCalculator(record: PropertyRecord) {
-    const costs = calculateOfferCosts(record.price);
+    const costs = calculateOfferCosts(recordBasePrice(record));
 
     return (
       <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4">
@@ -1292,7 +1552,7 @@ export default function Home() {
           <p className="font-black">التفاصيل المالية للعرض</p>
         </div>
         <div className="grid gap-2 text-sm font-bold text-slate-800 sm:grid-cols-2">
-          <span>سعر العقار: {formatMoney(costs.basePrice)}</span>
+          <span>السعر الأساسي ({record.basePriceMode === "asking" ? "السوم" : "الحد"}): {formatMoney(costs.basePrice)}</span>
           <span>ضريبة التصرفات 5%: {formatMoney(costs.rett)}</span>
           <span>عمولة الوساطة 2.5%: {formatMoney(costs.commission)}</span>
           <span>VAT على العمولة 15%: {formatMoney(costs.vatOnCommission)}</span>
@@ -1304,6 +1564,7 @@ export default function Home() {
 
   function renderRecordCard(record: PropertyRecord) {
     const client = workspace.clients.find((item) => item.id === record.clientId);
+    const pricePerMeter = recordPricePerMeter(record);
     const cardTone =
       record.status === "archived"
         ? "border-slate-600/35"
@@ -1326,15 +1587,20 @@ export default function Home() {
               </span>
             </div>
             <h3 className="mt-3 text-lg font-black text-slate-50">{record.title}</h3>
-            <p className="mt-1 text-sm text-slate-600">
+            <p className="mt-1 text-sm text-slate-400">
               {record.city}، {record.district} | {record.propertyType} | {record.transaction}
             </p>
           </div>
           <p className="rounded-2xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-lg font-black text-amber-100">{formatMoney(recordAmount(record))}</p>
         </div>
-        <div className="mt-4 grid gap-2 text-sm text-slate-300 sm:grid-cols-3">
+        <div className="mt-4 grid gap-2 text-sm text-slate-300 sm:grid-cols-2 xl:grid-cols-4">
           <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">المساحة: {record.area ? `${record.area} م²` : "غير محدد"}</span>
-          <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">الواجهة: {record.facade || "غير محدد"}</span>
+          <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">السوم: {formatMoney(record.askingPrice)}</span>
+          <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">سعر المتر: {pricePerMeter ? formatMoney(pricePerMeter) : "غير محدد"}</span>
+          <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">الواجهة: {record.facades.join("، ") || record.facade || "غير محدد"}</span>
+          <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">الشارع: {record.streetWidth ? `${record.streetWidth} م` : "غير محدد"}</span>
+          <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">المخطط: {record.planNumber || "غير محدد"}</span>
+          <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">العمر: {record.propertyAge || "غير محدد"}</span>
           <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">العميل: {client?.name ?? "غير مرتبط"}</span>
         </div>
         <p className="mt-3 line-clamp-2 text-sm leading-7 text-slate-300">{record.notes || "لا توجد ملاحظات."}</p>
@@ -1384,7 +1650,15 @@ export default function Home() {
               </option>
             ))}
           </select>
-          <button type="button" onClick={() => updateRecord(record.id, { deletedAt: nowIso() })} className="danger-button">
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm(`سيُنقل "${record.title}" إلى سلة المهملات ويمكن استعادته خلال 30 يوماً. هل تريد المتابعة؟`)) {
+                updateRecord(record.id, { deletedAt: nowIso() });
+              }
+            }}
+            className="danger-button"
+          >
             <Trash2 className="size-4" aria-hidden="true" />
             حذف
           </button>
@@ -1403,13 +1677,28 @@ export default function Home() {
             <input name="propertyType" defaultValue={record.propertyType} placeholder="نوع العقار" className={fieldClass()} />
             <input name="transaction" defaultValue={record.transaction} placeholder="نوع العملية" className={fieldClass()} />
             <input name="price" type="number" min="0" defaultValue={recordAmount(record) ?? ""} placeholder={record.kind === "offer" ? "السعر" : "الميزانية"} className={fieldClass()} />
+            {record.kind === "offer" ? <input name="askingPrice" type="number" min="0" defaultValue={record.askingPrice ?? ""} placeholder="السوم" className={fieldClass()} /> : null}
             <input name="area" type="number" min="0" defaultValue={record.area ?? ""} placeholder="المساحة" className={fieldClass()} />
+            <select name="basePriceMode" defaultValue={record.basePriceMode} className={fieldClass()}>
+              <option value="limit">احتساب سعر المتر من الحد</option>
+              <option value="asking">احتساب سعر المتر من السوم</option>
+            </select>
+            <input name="category" defaultValue={record.category} placeholder="التصنيف" className={fieldClass()} />
+            <input name="propertyAge" defaultValue={record.propertyAge} placeholder="عمر العقار" className={fieldClass()} />
             <input name="streetWidth" type="number" min="0" defaultValue={record.streetWidth ?? ""} placeholder="عرض الشارع" className={fieldClass()} />
             <input name="facade" defaultValue={record.facade} placeholder="الواجهة" className={fieldClass()} />
+            <input name="lengths" defaultValue={record.lengths} placeholder="الأطوال" className={fieldClass()} />
+            <input name="planNumber" defaultValue={record.planNumber} placeholder="رقم المخطط" className={fieldClass()} />
+            <input name="blockNumber" defaultValue={record.blockNumber} placeholder="رقم البلك" className={fieldClass()} />
+            <input name="plotNumber" defaultValue={record.plotNumber} placeholder="رقم القطعة" className={fieldClass()} />
             <input name="bedrooms" type="number" min="0" defaultValue={record.bedrooms ?? ""} placeholder="غرف النوم" className={fieldClass()} />
             <input name="bathrooms" type="number" min="0" defaultValue={record.bathrooms ?? ""} placeholder="دورات المياه" className={fieldClass()} />
             <input name="contact" defaultValue={record.contact} placeholder="رقم التواصل" className={fieldClass()} />
+            <input name="ownerName" defaultValue={record.ownerName} placeholder="اسم المالك/العميل" className={fieldClass()} />
+            <input name="ownerPhone" defaultValue={record.ownerPhone} placeholder="جوال المالك/العميل" className={fieldClass()} />
+            <input name="falLicense" defaultValue={record.falLicense || authUser?.falLicense} placeholder="رخصة فال" className={fieldClass()} />
             <input name="license" defaultValue={record.license} placeholder="رقم الإعلان العقاري" className={fieldClass()} />
+            <input name="reminderDays" type="number" min="1" defaultValue={record.reminderDays} placeholder="مهلة التحديث بالأيام" className={fieldClass()} />
             <textarea name="notes" rows={4} defaultValue={record.notes} placeholder="نص الإعلان/الملاحظات" className={`${fieldClass()} h-auto py-3 leading-8 md:col-span-3`} />
             <LocationPicker key={`edit-${record.id}-${record.updatedAt}`} initialLatitude={record.lat} initialLongitude={record.lng} />
             <div className="flex flex-wrap justify-end gap-2 md:col-span-3">
@@ -1436,30 +1725,54 @@ export default function Home() {
 
     return (
       <section className="grid gap-4">
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-4 flex items-center gap-2 text-slate-950">
+        <div className="rounded-2xl border border-slate-600/25 bg-[#0f1c34]/92 p-4 shadow-sm">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-slate-50">
+            <div className="flex items-center gap-2">
             <Filter className="size-5" aria-hidden="true" />
             <h2 className="text-lg font-black">بحث وفلاتر {kind === "offer" ? "العروض" : "الطلبات"}</h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setQuickKind(kind);
+                setQuickEntryMode("manual");
+                setQuickAddOpen(true);
+              }}
+              className="primary-button"
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              إضافة {recordKindLabels[kind]}
+            </button>
           </div>
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+            <button
+              type="button"
+              onClick={() => setFilters((current) => ({ ...current, status: "all" }))}
+              className={selectedStatusFilter === "all" ? "primary-button shrink-0" : "secondary-button shrink-0"}
+            >
+              الكل <span className="rounded-full bg-slate-950/20 px-2 py-0.5 text-xs">{activeRecords.filter((record) => record.kind === kind).length}</span>
+            </button>
+            {statusOptionsByKind[kind].map((option) => {
+              const count = activeRecords.filter((record) => record.kind === kind && record.status === option.value).length;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setFilters((current) => ({ ...current, status: option.value }))}
+                  className={selectedStatusFilter === option.value ? "primary-button shrink-0" : "secondary-button shrink-0"}
+                >
+                  {option.label} <span className="rounded-full bg-slate-950/20 px-2 py-0.5 text-xs">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="grid gap-3 md:grid-cols-[1fr_14rem]">
             <input
               value={filters.query}
               onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))}
-              placeholder="بحث بالحي، العميل، الوصف..."
+              placeholder="ابحث بالعنوان أو الحي أو المدينة أو اسم العميل..."
               className={fieldClass()}
             />
-            <select
-              value={selectedStatusFilter}
-              onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value as FilterState["status"] }))}
-              className={fieldClass()}
-            >
-              <option value="all">كل الحالات</option>
-              {statusOptionsByKind[kind].map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
             <select
               value={filters.city}
               onChange={(event) => setFilters((current) => ({ ...current, city: event.target.value }))}
@@ -1472,50 +1785,8 @@ export default function Home() {
                 </option>
               ))}
             </select>
-            <button type="button" onClick={() => setView("ai")} className="primary-button">
-              <Sparkles className="size-4" aria-hidden="true" />
-              إدخال AI
-            </button>
           </div>
         </div>
-
-        <form
-          className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
-          onSubmit={(event) => {
-            event.preventDefault();
-            addRecord(kind, new FormData(event.currentTarget));
-            event.currentTarget.reset();
-          }}
-        >
-          <div className="mb-4 flex items-center gap-2">
-            <Plus className="size-5 text-teal-700" aria-hidden="true" />
-            <h2 className="text-lg font-black text-slate-950">إضافة {recordKindLabels[kind]} سريع</h2>
-          </div>
-          <div className="grid gap-3 md:grid-cols-3">
-            <input name="title" placeholder="العنوان" className={fieldClass()} />
-            <input name="city" placeholder="المدينة" defaultValue="الرياض" className={fieldClass()} />
-            <input name="district" placeholder="الحي" className={fieldClass()} />
-            <input name="propertyType" placeholder="نوع العقار" className={fieldClass()} />
-            <input name="transaction" placeholder="نوع العملية" defaultValue={kind === "offer" ? "بيع" : "شراء"} className={fieldClass()} />
-            <input name="price" type="number" min="0" placeholder={kind === "offer" ? "السعر" : "الميزانية"} className={fieldClass()} />
-            <input name="area" type="number" min="0" placeholder="المساحة" className={fieldClass()} />
-            <select name="clientId" className={fieldClass()}>
-              {workspace.clients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name}
-                </option>
-              ))}
-            </select>
-            <input name="notes" placeholder="ملاحظات" className={fieldClass()} />
-            <LocationPicker key={`${kind}-${recordFormVersion}`} />
-          </div>
-          <div className="mt-4 flex justify-end">
-            <button type="submit" className="primary-button">
-              <Plus className="size-4" aria-hidden="true" />
-              حفظ
-            </button>
-          </div>
-        </form>
 
         <div className="grid gap-3">{records.length > 0 ? records.map(renderRecordCard) : <EmptyState label="لا توجد سجلات مطابقة." />}</div>
       </section>
@@ -1524,6 +1795,50 @@ export default function Home() {
 
   function renderDashboard() {
     const totalValue = offers.reduce((sum, record) => sum + (record.price ?? 0), 0);
+    const overdueRecords = activeRecords.filter((record) => {
+      const age = clockNow - new Date(record.updatedAt).getTime();
+      return age >= record.reminderDays * 24 * 60 * 60 * 1000;
+    });
+
+    function markRecordFresh(record: PropertyRecord) {
+      const refreshedAt = nowIso();
+      const nextDueAt = new Date(refreshedAt);
+      nextDueAt.setDate(nextDueAt.getDate() + record.reminderDays);
+      setWorkspace((current) => ({
+        ...current,
+        records: current.records.map((item) => (item.id === record.id ? { ...item, updatedAt: refreshedAt } : item)),
+        reminders: [
+          {
+            id: makeId("rem"),
+            recordId: record.id,
+            title: `تحديث ${record.title}`,
+            dueAt: nextDueAt.toISOString(),
+            status: "scheduled",
+          },
+          ...current.reminders.map((item) => (item.recordId === record.id ? { ...item, status: "completed" as const } : item)),
+        ],
+        activities: [
+          {
+            id: makeId("activity"),
+            type: "record_updated" as const,
+            title: "تأكيد تحديث العقار",
+            details: record.title,
+            recordId: record.id,
+            clientId: record.clientId || null,
+            createdAt: refreshedAt,
+          },
+          ...current.activities,
+        ].slice(0, 200),
+      }));
+      addNotification("تم تحديث العقار", `أعيد ضبط مهلة ${record.title} لمدة ${record.reminderDays} يوماً.`, "success");
+    }
+
+    function openUpdateMessage(record: PropertyRecord) {
+      const phone = normalizePhone(record.ownerPhone || record.contact);
+      const message = `السلام عليكم، نود تحديث حالة العقار: ${record.title}. هل ما زال متاحاً؟ وهل طرأ أي تغيير على السعر أو التفاصيل؟`;
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+    }
+
     return (
       <section className="grid gap-4">
         <div className="grid gap-3 md:grid-cols-4">
@@ -1532,40 +1847,208 @@ export default function Home() {
           {renderMetric("تذكيرات مستحقة", dueReminders, "amber", CalendarClock)}
           {renderMetric("قيمة العروض", formatMoney(totalValue), "slate", CircleDollarSign)}
         </div>
-        <div className="grid gap-4 xl:grid-cols-[1.3fr_0.7fr]">
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-lg font-black text-slate-950">آخر السجلات</h2>
-            <div className="grid gap-3">{activeRecords.slice(0, 4).map(renderRecordCard)}</div>
+        <Panel title="إعلانات تجاوزت موعد التحديث">
+          <div className="grid gap-3">
+            {overdueRecords.length > 0 ? (
+              overdueRecords.slice(0, 6).map((record) => (
+                <div key={record.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300/25 bg-amber-300/8 p-4">
+                  <div>
+                    <p className="font-black text-white">{record.title}</p>
+                    <p className="mt-1 text-sm text-slate-400">آخر تحديث: {formatDateTime(record.updatedAt, workspace.profile.timezone)}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" disabled={!record.ownerPhone && !record.contact} onClick={() => openUpdateMessage(record)} className="primary-button disabled:cursor-not-allowed disabled:opacity-40">
+                      <MessageCircle className="size-4" aria-hidden="true" />
+                      مراسلة لتحديث العقار
+                    </button>
+                    <button type="button" onClick={() => markRecordFresh(record)} className="secondary-button">
+                      <CheckCircle2 className="size-4" aria-hidden="true" />
+                      تم التحديث
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <EmptyState label="لا توجد إعلانات متأخرة عن موعد التحديث." />
+            )}
           </div>
-          <div className="grid content-start gap-4">
-            <Panel title="تنبيهات اليوم">
-              {workspace.notifications.length > 0 ? (
-                workspace.notifications.slice(0, 4).map((item) => (
-                  <div key={item.id} className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                    <p className="font-bold text-slate-950">{item.title}</p>
-                    <p className="mt-1 text-sm leading-6 text-slate-600">{item.body}</p>
+        </Panel>
+        <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
+          <div className="rounded-2xl border border-slate-600/25 bg-[#0f1c34]/92 p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-lg font-black text-slate-50">أحدث السجلات</h2>
+              <button type="button" onClick={() => setQuickAddOpen(true)} className="primary-button">
+                <Plus className="size-4" aria-hidden="true" />
+                إضافة سريع
+              </button>
+            </div>
+            <div className="grid gap-3">{activeRecords.length > 0 ? activeRecords.slice(0, 4).map(renderRecordCard) : <EmptyState label="ابدأ بإضافة أول عرض أو طلب." />}</div>
+          </div>
+          <Panel title="سجل النشاط">
+            <div className="relative grid gap-4 before:absolute before:bottom-2 before:right-[0.45rem] before:top-2 before:w-px before:bg-slate-600/40">
+              {workspace.activities.length > 0 ? (
+                workspace.activities.slice(0, 10).map((activity) => (
+                  <div key={activity.id} className="relative pr-7">
+                    <span className="absolute right-0 top-1.5 size-4 rounded-full border-4 border-[#0f1c34] bg-amber-300" />
+                    <p className="font-black text-slate-100">{activity.title}</p>
+                    <p className="mt-1 text-sm text-slate-400">{activity.details}</p>
+                    <p className="mt-1 text-xs text-slate-500">{formatDateTime(activity.createdAt, workspace.profile.timezone)}</p>
                   </div>
                 ))
               ) : (
-                <EmptyState label="لا توجد إشعارات حالياً." />
+                <EmptyState label="سيظهر هنا تاريخ الإضافات والتحديثات والمشاركات." />
               )}
-            </Panel>
-            <Panel title="اختصارات">
-              <div className="grid gap-2">
-                <button type="button" onClick={() => setView("offers")} className="secondary-button justify-center">
-                  إضافة أو متابعة عرض
-                </button>
-                <button type="button" onClick={() => setView("requests")} className="secondary-button justify-center">
-                  إضافة أو متابعة طلب
-                </button>
-                <button type="button" onClick={() => setView("map")} className="secondary-button justify-center">
-                  فتح الخريطة
-                </button>
-              </div>
-            </Panel>
-          </div>
+            </div>
+          </Panel>
         </div>
       </section>
+    );
+  }
+
+  function renderQuickAddModal() {
+    if (!quickAddOpen) {
+      return null;
+    }
+
+    const basePrice = Number(quickBasePriceMode === "asking" ? quickAskingPrice : quickLimitPrice);
+    const area = Number(quickArea);
+    const pricePerMeter = basePrice > 0 && area > 0 ? basePrice / area : null;
+    const facadeOptions = ["شمالية", "جنوبية", "شرقية", "غربية"];
+
+    return (
+      <div className="fixed inset-0 z-[80] overflow-y-auto bg-slate-950/80 p-3 backdrop-blur-sm lg:p-6" role="dialog" aria-modal="true" aria-label="إضافة سجل عقاري">
+        <div className="mx-auto max-w-5xl rounded-3xl border border-slate-600/35 bg-[#0a162a] shadow-2xl">
+          <div className="sticky top-0 z-10 flex items-center justify-between gap-3 rounded-t-3xl border-b border-slate-600/30 bg-[#0a162a]/95 p-4 backdrop-blur">
+            <div>
+              <p className="text-xs font-bold text-amber-300">إضافة سريع</p>
+              <h2 className="mt-1 text-2xl font-black text-white">سجل عقاري جديد</h2>
+            </div>
+            <button type="button" onClick={() => setQuickAddOpen(false)} className="secondary-button" aria-label="إغلاق">
+              <X className="size-5" aria-hidden="true" />
+            </button>
+          </div>
+
+          <div className="grid gap-4 p-4 lg:p-6">
+            <div className="grid grid-cols-3 gap-2 rounded-2xl border border-slate-600/25 bg-slate-950/25 p-1">
+              {([
+                ["manual", "إدخال يدوي"],
+                ["whatsapp", "لصق واتساب"],
+                ["voice", "إدخال صوتي"],
+              ] as const).map(([id, label]) => (
+                <button key={id} type="button" onClick={() => setQuickEntryMode(id)} className={quickEntryMode === id ? "primary-button justify-center" : "secondary-button justify-center"}>
+                  {id === "voice" ? <Mic2 className="size-4" aria-hidden="true" /> : id === "manual" ? <Plus className="size-4" aria-hidden="true" /> : <Sparkles className="size-4" aria-hidden="true" />}
+                  <span className="hidden sm:inline">{label}</span>
+                </button>
+              ))}
+            </div>
+
+            {quickEntryMode === "manual" ? (
+              <form
+                key={recordFormVersion}
+                className="grid gap-5"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  addRecord(quickKind, new FormData(event.currentTarget));
+                }}
+              >
+                <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-600/25 bg-slate-950/25 p-1">
+                  <button type="button" onClick={() => setQuickKind("offer")} className={quickKind === "offer" ? "primary-button justify-center" : "secondary-button justify-center"}>عرض — أملك عقاراً</button>
+                  <button type="button" onClick={() => setQuickKind("request")} className={quickKind === "request" ? "primary-button justify-center" : "secondary-button justify-center"}>طلب — مطلوب من عميل</button>
+                </div>
+
+                <section className="grid gap-3 rounded-2xl border border-slate-600/25 bg-[#0f1c34] p-4">
+                  <h3 className="font-black text-amber-100">البيانات الأساسية</h3>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <select name="status" defaultValue={quickKind === "offer" ? "for_sale" : "purchase"} className={fieldClass()}>
+                      {statusOptionsByKind[quickKind].map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                    <select name="category" className={fieldClass()}>
+                      <option value="">التصنيف</option><option value="سكني">سكني</option><option value="تجاري">تجاري</option><option value="صناعي">صناعي</option><option value="زراعي">زراعي</option>
+                    </select>
+                    <select name="propertyType" className={fieldClass()} required>
+                      <option value="">نوع العقار</option>
+                      {["أرض", "فيلا", "شقة", "عمارة", "بلك", "مستودع", "استراحة", "مكتب", "محل", "مزرعة", "أخرى"].map((item) => <option key={item} value={item}>{item}</option>)}
+                    </select>
+                    <input name="title" required placeholder="عنوان الإعلان" className={fieldClass()} />
+                    <input name="city" required defaultValue="الرياض" placeholder="المدينة" className={fieldClass()} />
+                    <input name="district" required placeholder={quickKind === "offer" ? "الحي" : "الأحياء المطلوبة"} className={fieldClass()} />
+                    <input name="propertyAge" placeholder={quickKind === "offer" ? "عمر العقار: جديد أو عدد السنوات" : "العمر المفضّل"} className={fieldClass()} />
+                  </div>
+                </section>
+
+                <section className="grid gap-3 rounded-2xl border border-slate-600/25 bg-[#0f1c34] p-4">
+                  <h3 className="font-black text-amber-100">السعر والمساحة</h3>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <input name="price" type="number" min="0" value={quickLimitPrice} onChange={(event) => setQuickLimitPrice(event.target.value)} placeholder={quickKind === "offer" ? "سعر البيع / الحد" : "الميزانية القصوى"} className={fieldClass()} />
+                    {quickKind === "offer" ? <input name="askingPrice" type="number" min="0" value={quickAskingPrice} onChange={(event) => setQuickAskingPrice(event.target.value)} placeholder="سعر السوم" className={fieldClass()} /> : null}
+                    <input name="area" type="number" min="0" value={quickArea} onChange={(event) => setQuickArea(event.target.value)} placeholder="المساحة م²" className={fieldClass()} />
+                    {quickKind === "offer" ? (
+                      <select name="basePriceMode" value={quickBasePriceMode} onChange={(event) => setQuickBasePriceMode(event.target.value as "limit" | "asking")} className={fieldClass()}>
+                        <option value="limit">السعر الأساسي: الحد</option><option value="asking">السعر الأساسي: السوم</option>
+                      </select>
+                    ) : <input type="hidden" name="basePriceMode" value="limit" />}
+                    <div className="flex h-11 items-center rounded-xl border border-emerald-300/25 bg-emerald-400/10 px-3 text-sm font-black text-emerald-100">سعر المتر: {pricePerMeter ? formatMoney(pricePerMeter) : "يُحسب تلقائياً"}</div>
+                  </div>
+                </section>
+
+                <section className="grid gap-3 rounded-2xl border border-slate-600/25 bg-[#0f1c34] p-4">
+                  <h3 className="font-black text-amber-100">التفاصيل الفنية والتراخيص</h3>
+                  <div>
+                    <p className="mb-2 text-sm font-bold text-slate-300">الواجهات — يمكن اختيار أكثر من واجهة</p>
+                    <div className="flex flex-wrap gap-2">
+                      {facadeOptions.map((facade) => (
+                        <label key={facade} className={quickFacades.includes(facade) ? "cursor-pointer rounded-xl border border-amber-300/40 bg-amber-300/15 px-3 py-2 text-sm font-black text-amber-100" : "cursor-pointer rounded-xl border border-slate-600/30 bg-slate-950/25 px-3 py-2 text-sm font-bold text-slate-300"}>
+                          <input type="checkbox" name="facades" value={facade} checked={quickFacades.includes(facade)} onChange={(event) => setQuickFacades((current) => event.target.checked ? [...current, facade] : current.filter((item) => item !== facade))} className="sr-only" />
+                          {facade}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <input name="lengths" placeholder="الأطوال" className={fieldClass()} />
+                    <input name="streetWidth" type="number" min="0" placeholder="عرض الشارع" className={fieldClass()} />
+                    <input name="planNumber" placeholder="رقم المخطط" className={fieldClass()} />
+                    <input name="blockNumber" placeholder="رقم البلك" className={fieldClass()} />
+                    <input name="plotNumber" placeholder="رقم القطعة" className={fieldClass()} />
+                    <input name="falLicense" defaultValue={authUser?.falLicense} placeholder="رقم رخصة فال" className={fieldClass()} />
+                    <input name="license" placeholder="رقم الإعلان العقاري" className={fieldClass()} />
+                  </div>
+                </section>
+
+                <section className="grid gap-3 rounded-2xl border border-slate-600/25 bg-[#0f1c34] p-4">
+                  <h3 className="font-black text-amber-100">العميل والموقع والمتابعة</h3>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <select name="clientId" className={fieldClass()}><option value="">إنشاء/ربط العميل من البيانات أدناه</option>{workspace.clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select>
+                    <input name="ownerName" placeholder={quickKind === "offer" ? "اسم المالك" : "اسم العميل"} className={fieldClass()} />
+                    <input name="ownerPhone" inputMode="tel" placeholder="رقم الجوال" className={fieldClass()} />
+                  </div>
+                  <LocationPicker key={`quick-${recordFormVersion}-${quickKind}`} />
+                  <div>
+                    <p className="mb-2 text-sm font-bold text-slate-300">تنبيه التحديث</p>
+                    <div className="flex flex-wrap gap-2">
+                      {[7, 14, 30].map((days) => <label key={days} className="cursor-pointer rounded-xl border border-slate-600/30 bg-slate-950/25 px-3 py-2 text-sm font-bold"><input type="radio" name="reminderDays" value={days} defaultChecked={days === workspace.profile.defaultReminderDays || (days === 14 && ![7, 14, 30].includes(workspace.profile.defaultReminderDays))} className="ml-2" />خلال {days} يوماً</label>)}
+                      <input name="reminderDays" type="number" min="1" placeholder="مدة أخرى" className={`${fieldClass()} max-w-36`} />
+                    </div>
+                  </div>
+                  <textarea name="notes" rows={5} placeholder="معلومات إضافية أو ملاحظات" className={`${fieldClass()} h-auto py-3 leading-8`} />
+                </section>
+
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button type="button" onClick={() => setQuickAddOpen(false)} className="secondary-button">إلغاء</button>
+                  <button type="submit" className="primary-button"><CheckCircle2 className="size-4" aria-hidden="true" />حفظ السجل</button>
+                </div>
+              </form>
+            ) : (
+              <div className="grid gap-3">
+                <p className="rounded-2xl border border-sky-300/20 bg-sky-400/10 p-3 text-sm font-bold text-sky-100">
+                  {quickEntryMode === "voice" ? "اضغط تسجيل صوتي مباشر، ثم راجع الحقول المستخرجة قبل الحفظ." : "الصق رسالة واتساب، حلّلها، ثم راجع الحقول المستخرجة قبل الحفظ."}
+                </p>
+                {renderAiEntry()}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -1773,19 +2256,27 @@ export default function Home() {
   }
 
   function renderClients() {
+    const sharedCount = activeRecords.filter((record) => record.sharedAt).length;
+    const whatsappCount = workspace.activities.filter((activity) => activity.type === "share_sent").length;
     return (
-      <section className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
+      <section className="grid gap-4">
+        <div className="grid gap-3 md:grid-cols-3">
+          {renderMetric("إجمالي جهات الاتصال", workspace.clients.length, "teal", Users)}
+          {renderMetric("مشاركات مسجلة", sharedCount, "blue", Share2)}
+          {renderMetric("عبر واتساب", whatsappCount, "amber", MessageCircle)}
+        </div>
+        <div className="grid gap-4 xl:grid-cols-[0.72fr_1.28fr]">
         <form
-          className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+          className="h-fit rounded-2xl border border-slate-600/25 bg-[#0f1c34]/92 p-4 shadow-sm"
           onSubmit={(event) => {
             event.preventDefault();
             addClient(new FormData(event.currentTarget));
             event.currentTarget.reset();
           }}
         >
-          <div className="mb-4 flex items-center gap-2">
-            <UserPlus className="size-5 text-teal-700" aria-hidden="true" />
-            <h2 className="text-lg font-black text-slate-950">إضافة عميل</h2>
+          <div className="mb-4 flex items-center gap-2 text-slate-50">
+            <UserPlus className="size-5 text-amber-300" aria-hidden="true" />
+            <h2 className="text-lg font-black">إضافة عميل</h2>
           </div>
           <div className="grid gap-3">
             <input name="name" required placeholder="اسم العميل" className={fieldClass()} />
@@ -1809,21 +2300,40 @@ export default function Home() {
           </div>
         </form>
         <div className="grid gap-3">
-          {workspace.clients.map((client) => (
-            <article key={client.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex flex-wrap items-start justify-between gap-3">
+          {workspace.clients.length > 0 ? workspace.clients.map((client) => {
+            const clientActivities = workspace.activities.filter((activity) => activity.clientId === client.id);
+            const clientRecords = activeRecords.filter((record) => record.clientId === client.id);
+            const isExpanded = expandedClientId === client.id;
+            return (
+            <article key={client.id} className="rounded-2xl border border-slate-600/25 bg-[#0f1c34]/92 p-4 shadow-sm">
+              <button type="button" onClick={() => setExpandedClientId(isExpanded ? null : client.id)} className="flex w-full flex-wrap items-start justify-between gap-3 text-right">
                 <div>
-                  <h3 className="text-lg font-black text-slate-950">{client.name}</h3>
-                  <p className="mt-1 text-sm text-slate-600">
+                  <h3 className="text-lg font-black text-slate-50">{client.name}</h3>
+                  <p className="mt-1 text-sm text-slate-400">
                     {clientTypeLabels[client.type]} | {client.phone || "لا يوجد رقم"}
                   </p>
                 </div>
-                <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">{client.priority}</span>
-              </div>
-              <p className="mt-3 text-sm leading-7 text-slate-600">{client.notes}</p>
+                <span className="rounded-full border border-amber-300/25 bg-amber-300/10 px-3 py-1 text-xs font-bold text-amber-100">{clientRecords.length} سجلات</span>
+              </button>
+              <p className="mt-3 text-sm leading-7 text-slate-400">{client.notes || "لا توجد ملاحظات."}</p>
               <p className="mt-3 text-xs text-slate-500">آخر تواصل: {formatDateTime(client.lastContactAt, workspace.profile.timezone)}</p>
+              {isExpanded ? (
+                <div className="mt-4 border-t border-slate-600/25 pt-4">
+                  <div className="mb-3 flex items-center gap-2 text-amber-100"><History className="size-4" aria-hidden="true" /><p className="font-black">سجل المتابعة</p></div>
+                  <div className="grid gap-3">
+                    {clientActivities.length > 0 ? clientActivities.map((activity) => (
+                      <div key={activity.id} className="rounded-xl border border-slate-600/25 bg-slate-950/25 p-3">
+                        <p className="font-bold text-slate-100">{activity.title}</p>
+                        <p className="mt-1 text-sm text-slate-400">{activity.details}</p>
+                        <p className="mt-1 text-xs text-slate-500">{formatDateTime(activity.createdAt, workspace.profile.timezone)}</p>
+                      </div>
+                    )) : <EmptyState label="لا توجد حركات مسجلة لهذا العميل بعد." />}
+                  </div>
+                </div>
+              ) : null}
             </article>
-          ))}
+          );}) : <EmptyState label="لا يوجد عملاء بعد. يمكن إضافتهم هنا أو تلقائياً عند حفظ سجل." />}
+        </div>
         </div>
       </section>
     );
@@ -1928,6 +2438,14 @@ export default function Home() {
                 onChange={(event) => updatePublicShareOptions({ includePrice: event.target.checked })}
               />
               إظهار السعر أو الميزانية
+            </label>
+            <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+              <input
+                type="checkbox"
+                checked={publicShareOptions.includeAskingPrice}
+                onChange={(event) => updatePublicShareOptions({ includeAskingPrice: event.target.checked })}
+              />
+              إظهار السوم
             </label>
             <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
               <input
@@ -2072,12 +2590,14 @@ export default function Home() {
                     </button>
                     <button
                       type="button"
-                      onClick={() =>
-                        setWorkspace((current) => ({
-                          ...current,
-                          records: current.records.filter((item) => item.id !== record.id),
-                        }))
-                      }
+                      onClick={() => {
+                        if (window.confirm(`حذف "${record.title}" نهائياً؟ لا يمكن التراجع عن هذا الإجراء.`)) {
+                          setWorkspace((current) => ({
+                            ...current,
+                            records: current.records.filter((item) => item.id !== record.id),
+                          }));
+                        }
+                      }}
                       className="danger-button"
                     >
                       <XCircle className="size-4" aria-hidden="true" />
@@ -2367,6 +2887,18 @@ export default function Home() {
   }
 
   function renderAdmin() {
+    const monthlyPerformance = Array.from({ length: 6 }, (_, index) => {
+      const date = new Date();
+      date.setMonth(date.getMonth() - (5 - index), 1);
+      const value = offers
+        .filter((record) => {
+          const created = new Date(record.createdAt);
+          return created.getFullYear() === date.getFullYear() && created.getMonth() === date.getMonth();
+        })
+        .reduce((sum, record) => sum + (record.price ?? 0), 0);
+      return { label: new Intl.DateTimeFormat("ar-SA", { month: "short" }).format(date), value };
+    });
+    const maxMonthlyValue = Math.max(...monthlyPerformance.map((item) => item.value), 1);
     const sectionContent: Record<ProfileSection, React.ReactNode> = {
       settings: (
         <section className="grid gap-4 xl:grid-cols-2">
@@ -2374,17 +2906,52 @@ export default function Home() {
             <div className="grid gap-3">
               <Info label="المستخدم" value={workspace.profile.name} />
               <Info label="الجوال" value={authUser?.phone ?? ""} />
+              <Info label="البريد الإلكتروني" value={authUser?.email ?? ""} />
               <Info label="رقم الجوال للدخول" value={authUser?.phone || authUser?.username || ""} />
               <Info label="رخصة فال" value={authUser?.falLicense || "غير مضافة"} />
               <Info label="الدور" value={workspace.profile.role === "admin" ? "مدير" : "وسيط"} />
-              <Info label="المنطقة الزمنية" value={workspace.profile.timezone} />
               <Info label="سياسة التسجيل" value="مفتوح لأي مستخدم" />
+              <form
+                className="grid gap-3 border-t border-slate-600/25 pt-3"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const data = new FormData(event.currentTarget);
+                  const days = Number(data.get("defaultReminderDays") || 14);
+                  setWorkspace((current) => ({
+                    ...current,
+                    profile: {
+                      ...current.profile,
+                      timezone: String(data.get("timezone") || riyadhTimezone),
+                      defaultReminderDays: days > 0 ? days : 14,
+                    },
+                  }));
+                  addNotification("تم حفظ الإعدادات", "تم تحديث المنطقة الزمنية ومدة التذكير الافتراضية.", "success");
+                }}
+              >
+                <label className="grid gap-2 text-sm font-bold text-slate-300">المنطقة الزمنية<select name="timezone" defaultValue={workspace.profile.timezone} className={fieldClass()}><option value="Asia/Riyadh">Asia/Riyadh</option><option value="Asia/Beirut">Asia/Beirut</option><option value="Asia/Dubai">Asia/Dubai</option></select></label>
+                <label className="grid gap-2 text-sm font-bold text-slate-300">مهلة التحديث الافتراضية بالأيام<input name="defaultReminderDays" type="number" min="1" defaultValue={workspace.profile.defaultReminderDays} className={fieldClass()} /></label>
+                <button type="submit" className="primary-button justify-center">حفظ الإعدادات</button>
+              </form>
             </div>
           </Panel>
-          <Panel title="خصوصية البيانات">
-            <p className="leading-8 text-slate-700">
-              بيانات العروض والطلبات والعملاء والتذكيرات مرتبطة بحسابك فقط، ويتم تحميلها بعد تسجيل الدخول.
-            </p>
+          <Panel title="الأداء خلال 6 أشهر">
+            <div className="flex h-64 items-end gap-3 rounded-2xl border border-slate-600/25 bg-slate-950/25 p-4">
+              {monthlyPerformance.map((item) => (
+                <div key={item.label} className="flex h-full flex-1 flex-col items-center justify-end gap-2">
+                  <span className="text-[10px] font-bold text-slate-400">{item.value ? formatMoney(item.value) : "0"}</span>
+                  <div className="w-full rounded-t-xl bg-gradient-to-t from-amber-400 to-emerald-300" style={{ height: `${Math.max((item.value / maxMonthlyValue) * 100, 4)}%` }} />
+                  <span className="text-xs font-bold text-slate-400">{item.label}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-sm leading-7 text-slate-400">القيم تمثل إجمالي قيمة العروض المضافة شهرياً، وتُحدّث تلقائياً من سجلات الحساب.</p>
+          </Panel>
+          <Panel title="خصوصية وربط النظام">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Info label="قاعدة البيانات" value={cloudStatus === "synced" ? "متصلة" : "تجري المزامنة"} />
+              <Info label="البريد والإشعارات" value={workspace.profile.smtpReady ? "جاهز" : "يحتاج إعداداً"} />
+            </div>
+            <p className="mt-3 leading-8 text-slate-400">بيانات العروض والطلبات والعملاء والتذكيرات مرتبطة بحسابك فقط ولا تظهر لأي مستخدم آخر.</p>
           </Panel>
         </section>
       ),
@@ -2397,7 +2964,7 @@ export default function Home() {
 
     return (
       <section className="grid gap-4">
-        <div className="flex gap-2 overflow-x-auto rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+        <div className="flex gap-2 overflow-x-auto rounded-2xl border border-slate-600/25 bg-[#0f1c34]/92 p-2 shadow-sm">
           {profileSections.map((item) => {
             const Icon = item.icon;
             const count = item.id === "notifications" && unreadNotifications > 0 ? unreadNotifications : null;
@@ -2408,7 +2975,7 @@ export default function Home() {
                 onClick={() => setProfileSection(item.id)}
                 className={[
                   "flex h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-bold transition",
-                  profileSection === item.id ? "bg-teal-700 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200",
+                  profileSection === item.id ? "bg-amber-300 text-slate-950" : "bg-slate-950/25 text-slate-300 hover:bg-slate-800 hover:text-white",
                 ].join(" ")}
               >
                 <Icon className="size-4" aria-hidden="true" />
@@ -2483,7 +3050,7 @@ export default function Home() {
                 وسيط نشط
               </span>
             </div>
-            <button type="button" onClick={() => setView("offers")} className="primary-button mt-4 w-full justify-center">
+            <button type="button" onClick={() => { setQuickKind("offer"); setQuickEntryMode("manual"); setQuickAddOpen(true); }} className="primary-button mt-4 w-full justify-center">
               <Plus className="size-5" aria-hidden="true" />
               إضافة عرض
             </button>
@@ -2517,7 +3084,7 @@ export default function Home() {
                 <h2 className="mt-1 text-3xl font-black text-white">{activeTitle}</h2>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <button type="button" onClick={() => setView("ai")} className="primary-button">
+                <button type="button" onClick={() => { setQuickEntryMode("whatsapp"); setQuickAddOpen(true); }} className="primary-button">
                   <Sparkles className="size-4" aria-hidden="true" />
                   إدخال AI
                 </button>
@@ -2550,6 +3117,15 @@ export default function Home() {
           <div className="p-4 lg:p-6">{renderContent()}</div>
         </div>
       </div>
+      <button
+        type="button"
+        onClick={() => { setQuickEntryMode("manual"); setQuickAddOpen(true); }}
+        className="fixed bottom-5 left-5 z-40 grid size-14 place-items-center rounded-2xl bg-amber-300 text-slate-950 shadow-xl shadow-black/30 transition hover:-translate-y-1 hover:bg-amber-200"
+        aria-label="إضافة سريع"
+      >
+        <Plus className="size-7" aria-hidden="true" />
+      </button>
+      {renderQuickAddModal()}
     </main>
   );
 }

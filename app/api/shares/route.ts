@@ -16,6 +16,7 @@ const recordSchema = z.object({
   propertyType: z.string().default(""),
   transaction: z.string().default(""),
   price: z.number().nullable(),
+  askingPrice: z.number().nullable().default(null),
   budget: z.number().nullable(),
   area: z.number().nullable(),
   contact: z.string().default(""),
@@ -28,6 +29,7 @@ const shareSchema = z.object({
   record: recordSchema,
   options: z.object({
     includePrice: z.boolean().default(true),
+    includeAskingPrice: z.boolean().default(true),
     includeArea: z.boolean().default(true),
     includeContact: z.boolean().default(false),
     includeNotes: z.boolean().default(false),

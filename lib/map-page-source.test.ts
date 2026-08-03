@@ -117,6 +117,26 @@ describe("map page source", () => {
     expect(extractRoute).toContain("For short WhatsApp messages");
   });
 
+  it("implements the approved broker workspace layout and advanced quick entry", () => {
+    const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
+
+    expect(pageSource).toContain("إعلانات تجاوزت موعد التحديث");
+    expect(pageSource).toContain("مراسلة لتحديث العقار");
+    expect(pageSource).toContain("سجل النشاط");
+    expect(pageSource).toContain("إدخال يدوي");
+    expect(pageSource).toContain("لصق واتساب");
+    expect(pageSource).toContain("إدخال صوتي");
+    expect(pageSource).toContain('name="askingPrice"');
+    expect(pageSource).toContain('name="basePriceMode"');
+    expect(pageSource).toContain('name="facades"');
+    expect(pageSource).toContain('name="planNumber"');
+    expect(pageSource).toContain('name="blockNumber"');
+    expect(pageSource).toContain('name="plotNumber"');
+    expect(pageSource).toContain('name="reminderDays"');
+    expect(pageSource).toContain("سجل المتابعة");
+    expect(pageSource).toContain("الأداء خلال 6 أشهر");
+  });
+
   it("supports OTP email activation and password recovery UI", () => {
     const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
     const registerRoute = readFileSync(join(process.cwd(), "app", "api", "auth", "register", "route.ts"), "utf8");

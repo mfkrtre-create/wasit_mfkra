@@ -10,6 +10,7 @@ export type ShareRecordInput = {
   propertyType: string;
   transaction: string;
   price: number | null;
+  askingPrice: number | null;
   budget: number | null;
   area: number | null;
   contact: string;
@@ -20,6 +21,7 @@ export type ShareRecordInput = {
 
 export type ShareOptions = {
   includePrice: boolean;
+  includeAskingPrice: boolean;
   includeArea: boolean;
   includeContact: boolean;
   includeNotes: boolean;
@@ -36,6 +38,7 @@ export type PublicShareSnapshot = {
   city: string;
   district: string;
   price?: number | null;
+  askingPrice?: number | null;
   budget?: number | null;
   area?: number | null;
   contact?: string;
@@ -69,6 +72,7 @@ export function buildPublicShareSnapshot(record: ShareRecordInput, options: Shar
     city: record.city,
     district: record.district,
     price: options.includePrice ? record.price : undefined,
+    askingPrice: options.includeAskingPrice ? record.askingPrice : undefined,
     budget: options.includePrice ? record.budget : undefined,
     area: options.includeArea ? record.area : undefined,
     contact: options.includeContact ? record.contact : undefined,

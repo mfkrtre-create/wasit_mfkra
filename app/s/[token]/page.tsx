@@ -72,6 +72,7 @@ export default async function SharePage({ params }: SharePageProps) {
           <Detail label="نوع العقار" value={snapshot.propertyType} />
           <Detail label="نوع العملية" value={snapshot.transaction} />
           <Detail label="القيمة" value={amount} />
+          <Detail label="السوم" value={formatMoney(snapshot.askingPrice)} />
           <Detail label="المساحة" value={snapshot.area ? `${snapshot.area} م²` : null} />
           <Detail label="التواصل" value={snapshot.contact} />
         </section>
