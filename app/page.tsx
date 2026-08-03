@@ -425,17 +425,17 @@ function mapAiToRecord(data: PropertyData, source: "ai-text" | "ai-voice", clien
 
 function metricClass(tone: "teal" | "blue" | "amber" | "slate") {
   const tones = {
-    teal: "border-teal-200 bg-teal-50 text-teal-950",
-    blue: "border-blue-200 bg-blue-50 text-blue-950",
-    amber: "border-amber-200 bg-amber-50 text-amber-950",
-    slate: "border-slate-200 bg-white text-slate-950",
+    teal: "border-emerald-400/30 bg-emerald-400/10 text-emerald-50",
+    blue: "border-sky-400/30 bg-sky-400/10 text-sky-50",
+    amber: "border-amber-300/40 bg-amber-300/12 text-amber-50",
+    slate: "border-slate-400/20 bg-slate-400/10 text-slate-50",
   };
 
-  return `rounded-lg border p-4 shadow-sm ${tones[tone]}`;
+  return `rounded-2xl border p-4 shadow-sm backdrop-blur ${tones[tone]}`;
 }
 
 function fieldClass() {
-  return "h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-600/20";
+  return "h-11 w-full rounded-xl border border-slate-600/40 bg-slate-950/30 px-3 text-sm text-slate-50 outline-none transition placeholder:text-slate-400 focus:border-amber-300/60 focus:ring-2 focus:ring-amber-300/20";
 }
 
 function hasUsableCoordinates(latitude: number, longitude: number) {
@@ -1304,31 +1304,40 @@ export default function Home() {
 
   function renderRecordCard(record: PropertyRecord) {
     const client = workspace.clients.find((item) => item.id === record.clientId);
+    const cardTone =
+      record.status === "archived"
+        ? "border-slate-600/35"
+        : record.status === "sold_or_rented" || record.status === "fulfilled"
+          ? "border-emerald-400/35"
+          : record.kind === "offer"
+            ? "border-amber-300/35"
+            : "border-sky-400/35";
     return (
-      <article key={record.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <article key={record.id} className={`relative overflow-hidden rounded-2xl border bg-[#0f1c34]/92 p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-amber-300/55 ${cardTone}`}>
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-l from-amber-300 via-emerald-400 to-sky-400 opacity-70" />
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">
+              <span className="rounded-full border border-slate-500/25 bg-slate-900/40 px-3 py-1 text-xs font-bold text-slate-200">
                 {recordKindLabels[record.kind]}
               </span>
-              <span className="rounded-md bg-teal-50 px-2 py-1 text-xs font-bold text-teal-800">
+              <span className="rounded-full border border-emerald-300/25 bg-emerald-400/10 px-3 py-1 text-xs font-bold text-emerald-100">
                 {statusLabels[record.status]}
               </span>
             </div>
-            <h3 className="mt-3 text-lg font-black text-slate-950">{record.title}</h3>
+            <h3 className="mt-3 text-lg font-black text-slate-50">{record.title}</h3>
             <p className="mt-1 text-sm text-slate-600">
               {record.city}، {record.district} | {record.propertyType} | {record.transaction}
             </p>
           </div>
-          <p className="text-lg font-black text-slate-950">{formatMoney(recordAmount(record))}</p>
+          <p className="rounded-2xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-lg font-black text-amber-100">{formatMoney(recordAmount(record))}</p>
         </div>
-        <div className="mt-4 grid gap-2 text-sm text-slate-700 sm:grid-cols-3">
-          <span>المساحة: {record.area ? `${record.area} م²` : "غير محدد"}</span>
-          <span>الواجهة: {record.facade || "غير محدد"}</span>
-          <span>العميل: {client?.name ?? "غير مرتبط"}</span>
+        <div className="mt-4 grid gap-2 text-sm text-slate-300 sm:grid-cols-3">
+          <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">المساحة: {record.area ? `${record.area} م²` : "غير محدد"}</span>
+          <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">الواجهة: {record.facade || "غير محدد"}</span>
+          <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">العميل: {client?.name ?? "غير مرتبط"}</span>
         </div>
-        <p className="mt-3 line-clamp-2 text-sm leading-7 text-slate-600">{record.notes || "لا توجد ملاحظات."}</p>
+        <p className="mt-3 line-clamp-2 text-sm leading-7 text-slate-300">{record.notes || "لا توجد ملاحظات."}</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <button type="button" onClick={() => addReminder(record.id)} className="action-button">
             <CalendarClock className="size-4" aria-hidden="true" />
@@ -1356,9 +1365,9 @@ export default function Home() {
           </button>
           {record.kind === "offer" && view === "offers" ? (
             <button
-              type="button"
-              onClick={() => setExpandedCalculatorRecordId((current) => (current === record.id ? null : record.id))}
-              className="action-button border-blue-200 bg-blue-50 text-blue-800 hover:border-blue-300"
+            type="button"
+            onClick={() => setExpandedCalculatorRecordId((current) => (current === record.id ? null : record.id))}
+              className="action-button border-amber-300/35 bg-amber-300/10 text-amber-100 hover:border-amber-300/60"
             >
               <Calculator className="size-4" aria-hidden="true" />
               الحاسبة
@@ -1367,7 +1376,7 @@ export default function Home() {
           <select
             value={record.status}
             onChange={(event) => updateRecord(record.id, { status: event.target.value as RecordStatus })}
-            className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm"
+            className="h-10 rounded-xl border border-slate-600/40 bg-slate-950/30 px-3 text-sm"
           >
             {statusOptionsByKind[record.kind].map((option) => (
               <option key={option.value} value={option.value}>
@@ -1382,7 +1391,7 @@ export default function Home() {
         </div>
         {editingRecordId === record.id ? (
           <form
-            className="mt-4 grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 md:grid-cols-3"
+            className="mt-4 grid gap-3 rounded-2xl border border-slate-500/20 bg-slate-950/20 p-3 md:grid-cols-3"
             onSubmit={(event) => {
               event.preventDefault();
               updateRecordFromForm(record.id, new FormData(event.currentTarget));
@@ -2109,7 +2118,7 @@ export default function Home() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1 text-sm font-black">
+              <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-600/20 bg-slate-950/25 p-1 text-sm font-black">
                 {[
                   { id: "login", label: "دخول" },
                   { id: "register", label: "تسجيل" },
@@ -2120,7 +2129,7 @@ export default function Home() {
                     onClick={() => setAuthMode(item.id as typeof authMode)}
                     className={[
                       "rounded-xl px-3 py-3 transition",
-                      visibleAuthMode === item.id ? "bg-white text-teal-800 shadow-sm" : "text-slate-600 hover:bg-white/70",
+                      visibleAuthMode === item.id ? "bg-amber-300 text-slate-950 shadow-sm" : "text-slate-300 hover:bg-slate-800/70 hover:text-white",
                     ].join(" ")}
                   >
                     {item.label}
@@ -2128,14 +2137,14 @@ export default function Home() {
                 ))}
               </div>
               {authMode === "register" || authMode === "confirm" ? (
-                <div className="rounded-2xl border border-indigo-100 bg-white p-4">
-                  <div className="mb-3 flex items-center justify-between text-sm font-black text-indigo-900">
+                <div className="rounded-2xl border border-amber-300/20 bg-slate-950/25 p-4">
+                  <div className="mb-3 flex items-center justify-between text-sm font-black text-amber-100">
                     <span>{authMode === "confirm" ? "خطوة تأكيد البريد" : "بيانات الحساب"}</span>
                     <span dir="ltr">{authMode === "confirm" ? "2/2" : "1/2"}</span>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <span className={["h-1.5 rounded-full", authMode === "register" || authMode === "confirm" ? "bg-indigo-600" : "bg-slate-200"].join(" ")} />
-                    <span className={["h-1.5 rounded-full", authMode === "confirm" ? "bg-indigo-600" : "bg-slate-200"].join(" ")} />
+                    <span className={["h-1.5 rounded-full", authMode === "register" || authMode === "confirm" ? "bg-amber-300" : "bg-slate-700"].join(" ")} />
+                    <span className={["h-1.5 rounded-full", authMode === "confirm" ? "bg-amber-300" : "bg-slate-700"].join(" ")} />
                   </div>
                 </div>
               ) : null}
@@ -2160,7 +2169,7 @@ export default function Home() {
                 className="grid gap-2"
               >
                 {authMode === "confirm" ? (
-                  <p className="rounded-xl border border-teal-100 bg-teal-50 p-3 text-sm font-bold leading-7 text-teal-900">
+                  <p className="rounded-xl border border-emerald-300/25 bg-emerald-400/10 p-3 text-sm font-bold leading-7 text-emerald-100">
                     أرسلنا رمز OTP إلى بريدك. أدخل الرمز لتفعيل الحساب والدخول مباشرة.
                   </p>
                 ) : null}
@@ -2261,7 +2270,7 @@ export default function Home() {
                           : "تغيير كلمة المرور"}
                 </button>
                 {authMode === "login" ? (
-                  <button type="button" onClick={() => setAuthMode("forgot")} className="text-right text-sm font-bold text-slate-600 hover:text-teal-800">
+                  <button type="button" onClick={() => setAuthMode("forgot")} className="text-right text-sm font-bold text-slate-300 hover:text-amber-200">
                     نسيت كلمة المرور؟
                   </button>
                 ) : null}
@@ -2278,7 +2287,7 @@ export default function Home() {
               </form>
             </>
           )}
-          {authMessage ? <p className="rounded-md bg-slate-100 p-3 text-sm font-bold leading-7 text-slate-700">{authMessage}</p> : null}
+          {authMessage ? <p className="rounded-xl border border-slate-600/25 bg-slate-950/25 p-3 text-sm font-bold leading-7 text-slate-200">{authMessage}</p> : null}
         </div>
       </Panel>
     );
@@ -2288,12 +2297,17 @@ export default function Home() {
     const visibleAuthMode = authMode === "register" || authMode === "confirm" ? "register" : "login";
 
     return (
-      <main className="min-h-screen bg-slate-100 text-slate-950">
-        <header className="border-b border-slate-200 bg-white px-4 py-4 lg:px-8">
+      <main className="min-h-screen bg-[#071224] text-slate-50">
+        <header className="border-b border-slate-700/40 bg-[#071224]/90 px-4 py-4 backdrop-blur lg:px-8">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-bold text-teal-700">مفكرة الوسيط</p>
-              <h1 className="mt-1 text-2xl font-black">إدارة الوساطة العقارية</h1>
+            <div className="flex items-center gap-3">
+              <div className="grid size-11 place-items-center rounded-2xl border border-amber-300/30 bg-amber-300/15 text-amber-200">
+                <Building2 className="size-6" aria-hidden="true" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-amber-300">مفكرة الوسيط</p>
+                <h1 className="mt-1 text-2xl font-black text-white">إدارة الوساطة العقارية</h1>
+              </div>
             </div>
             <div className="flex gap-2">
               <button type="button" onClick={() => setAuthMode("login")} className={visibleAuthMode === "login" ? "primary-button" : "secondary-button"}>
@@ -2306,12 +2320,27 @@ export default function Home() {
           </div>
         </header>
         <section className="mx-auto grid max-w-6xl gap-6 p-4 lg:grid-cols-[0.9fr_1.1fr] lg:p-8">
-          <div className="rounded-2xl border border-teal-100 bg-white p-6 shadow-sm">
-            <p className="text-sm font-bold text-teal-700">نظام خاص بالوسطاء</p>
-            <h2 className="mt-3 text-3xl font-black leading-tight text-slate-950">سجل دخولك للوصول إلى بياناتك العقارية</h2>
-            <p className="mt-4 leading-8 text-slate-600">
+          <div className="relative overflow-hidden rounded-3xl border border-amber-300/25 bg-[#0f1c34]/95 p-6 shadow-sm">
+            <div className="pointer-events-none absolute -left-16 -top-16 size-44 rounded-full bg-amber-300/10 blur-2xl" />
+            <p className="text-sm font-bold text-emerald-300">نظام احترافي خاص بالوسطاء</p>
+            <h2 className="mt-3 text-4xl font-black leading-tight text-white">سجل دخولك للوصول إلى بياناتك العقارية</h2>
+            <p className="mt-4 leading-8 text-slate-300">
               كل حساب له عروضه وطلباته وعملاؤه وتذكيراته الخاصة. لا تظهر بيانات أي مستخدم قبل تسجيل الدخول.
             </p>
+            <div className="mt-8 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-slate-600/25 bg-slate-950/25 p-4">
+                <p className="text-2xl font-black text-amber-200">خصوصية</p>
+                <p className="mt-1 text-sm text-slate-400">بيانات كل وسيط منفصلة</p>
+              </div>
+              <div className="rounded-2xl border border-slate-600/25 bg-slate-950/25 p-4">
+                <p className="text-2xl font-black text-emerald-200">AI</p>
+                <p className="mt-1 text-sm text-slate-400">إدخال ذكي وسريع</p>
+              </div>
+              <div className="rounded-2xl border border-slate-600/25 bg-slate-950/25 p-4">
+                <p className="text-2xl font-black text-sky-200">خرائط</p>
+                <p className="mt-1 text-sm text-slate-400">مواقع وسجلات واضحة</p>
+              </div>
+            </div>
           </div>
           {renderAuthControls()}
         </section>
@@ -2434,12 +2463,30 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-slate-100 text-slate-950">
+    <main className="min-h-screen overflow-x-hidden bg-[#071224] text-slate-50">
       <div className="flex min-h-screen">
-        <aside className="hidden w-72 shrink-0 border-l border-slate-200 bg-white lg:block">
-          <div className="border-b border-slate-200 p-5">
-            <p className="text-xs font-bold text-teal-700">مفكرة الوسيط</p>
-            <h1 className="mt-1 text-xl font-black">إدارة الوساطة العقارية</h1>
+        <aside className="hidden w-72 shrink-0 border-l border-slate-700/40 bg-[#0a162a]/95 lg:block">
+          <div className="border-b border-slate-700/40 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold text-amber-300">مفكرة الوسيط</p>
+                <h1 className="mt-1 text-xl font-black text-white">العقاري 🏠</h1>
+              </div>
+              <div className="grid size-12 place-items-center rounded-2xl border border-amber-300/30 bg-amber-300/15 text-amber-200">
+                <Building2 className="size-6" aria-hidden="true" />
+              </div>
+            </div>
+            <div className="mt-4 rounded-2xl border border-slate-600/30 bg-slate-950/25 p-4">
+              <p className="font-black text-white">{workspace.profile.name}</p>
+              <p className="mt-1 text-xs text-slate-400">{authUser?.phone || authUser?.email}</p>
+              <span className="mt-3 inline-flex rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1 text-xs font-black text-amber-200">
+                وسيط نشط
+              </span>
+            </div>
+            <button type="button" onClick={() => setView("offers")} className="primary-button mt-4 w-full justify-center">
+              <Plus className="size-5" aria-hidden="true" />
+              إضافة عرض
+            </button>
           </div>
           <nav className="grid gap-1 p-3">
             {navItems.map((item) => {
@@ -2450,8 +2497,8 @@ export default function Home() {
                   type="button"
                   onClick={() => setView(item.id)}
                   className={[
-                    "flex h-11 items-center gap-3 rounded-md px-3 text-sm font-bold transition",
-                    view === item.id ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-slate-100",
+                    "flex h-12 items-center gap-3 rounded-xl px-3 text-sm font-bold transition",
+                    view === item.id ? "border border-amber-300/30 bg-amber-300/15 text-amber-100" : "text-slate-300 hover:bg-slate-800/60 hover:text-white",
                   ].join(" ")}
                 >
                   <Icon className="size-4" aria-hidden="true" />
@@ -2463,11 +2510,11 @@ export default function Home() {
         </aside>
 
         <div className="min-w-0 flex-1">
-          <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur lg:px-6">
+          <header className="sticky top-0 z-20 border-b border-slate-700/40 bg-[#071224]/90 px-4 py-4 backdrop-blur lg:px-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-bold text-teal-700">مفكرة الوسيط</p>
-                <h2 className="mt-1 text-2xl font-black">{activeTitle}</h2>
+                <p className="text-xs font-bold text-emerald-300">مفكرة الوسيط جاهزة للوسطاء وفريقك</p>
+                <h2 className="mt-1 text-3xl font-black text-white">{activeTitle}</h2>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button type="button" onClick={() => setView("ai")} className="primary-button">
@@ -2491,8 +2538,8 @@ export default function Home() {
                   type="button"
                   onClick={() => setView(item.id)}
                   className={[
-                    "h-10 shrink-0 rounded-md px-3 text-sm font-bold",
-                    view === item.id ? "bg-teal-700 text-white" : "bg-slate-100 text-slate-700",
+                    "h-10 shrink-0 rounded-xl px-3 text-sm font-bold",
+                    view === item.id ? "bg-amber-300 text-slate-950" : "bg-slate-800/80 text-slate-200",
                   ].join(" ")}
                 >
                   {item.label}
@@ -2509,8 +2556,8 @@ export default function Home() {
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="mb-4 text-lg font-black text-slate-950">{title}</h2>
+    <section className="rounded-2xl border border-slate-600/25 bg-[#0f1c34]/92 p-4 shadow-sm">
+      <h2 className="mb-4 text-lg font-black text-slate-50">{title}</h2>
       {children}
     </section>
   );
@@ -2518,7 +2565,7 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 
 function EmptyState({ label }: { label: string }) {
   return (
-    <div className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center font-bold text-slate-500">
+    <div className="rounded-2xl border border-dashed border-slate-600/35 bg-slate-950/20 p-8 text-center font-bold text-slate-400">
       {label}
     </div>
   );
@@ -2526,9 +2573,9 @@ function EmptyState({ label }: { label: string }) {
 
 function Info({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-      <p className="text-xs font-bold text-slate-500">{label}</p>
-      <p className="mt-1 font-black text-slate-950">{value}</p>
+    <div className="rounded-xl border border-slate-600/25 bg-slate-950/25 p-3">
+      <p className="text-xs font-bold text-slate-400">{label}</p>
+      <p className="mt-1 font-black text-slate-50">{value}</p>
     </div>
   );
 }

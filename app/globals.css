@@ -2,9 +2,20 @@
 @import "maplibre-gl/dist/maplibre-gl.css";
 
 :root {
-  color-scheme: light;
-  --background: #f6f7f9;
-  --foreground: #172026;
+  color-scheme: dark;
+  --background: #071224;
+  --surface: #0d1b32;
+  --surface-strong: #111f3a;
+  --surface-soft: #172641;
+  --border: rgba(148, 163, 184, 0.22);
+  --border-strong: rgba(226, 185, 59, 0.34);
+  --foreground: #f8fafc;
+  --muted: #b9c5d8;
+  --muted-strong: #dae4f5;
+  --gold: #e5b53b;
+  --gold-strong: #f3c64b;
+  --teal: #10b981;
+  --danger: #f87171;
 }
 
 * {
@@ -14,9 +25,16 @@
 body {
   min-height: 100vh;
   margin: 0;
-  background: var(--background);
+  background:
+    radial-gradient(circle at top right, rgba(229, 181, 59, 0.12), transparent 30rem),
+    linear-gradient(135deg, #06101f 0%, #071224 42%, #0b1730 100%);
   color: var(--foreground);
   font-family: Arial, "Tahoma", sans-serif;
+}
+
+::selection {
+  background: rgba(229, 181, 59, 0.35);
+  color: #fff;
 }
 
 button,
@@ -48,40 +66,50 @@ button:disabled {
     background-color 150ms ease,
     border-color 150ms ease,
     color 150ms ease,
-    transform 150ms ease;
+    transform 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.primary-button:hover,
+.secondary-button:hover,
+.action-button:hover,
+.danger-button:hover {
+  transform: translateY(-1px);
 }
 
 .primary-button {
-  background: #0f766e;
-  color: white;
+  border: 1px solid rgba(229, 181, 59, 0.35);
+  background: linear-gradient(135deg, var(--gold-strong), var(--gold));
+  color: #08111f;
+  box-shadow: 0 12px 30px rgba(229, 181, 59, 0.22);
 }
 
 .primary-button:hover {
-  background: #115e59;
+  background: linear-gradient(135deg, #ffd760, #e5b53b);
 }
 
 .secondary-button,
 .action-button {
-  border: 1px solid #cbd5e1;
-  background: white;
-  color: #334155;
+  border: 1px solid var(--border);
+  background: rgba(17, 31, 58, 0.86);
+  color: var(--muted-strong);
 }
 
 .secondary-button:hover,
 .action-button:hover {
-  border-color: #5eead4;
-  background: #f0fdfa;
-  color: #115e59;
+  border-color: var(--border-strong);
+  background: rgba(30, 43, 74, 0.95);
+  color: #fff;
 }
 
 .danger-button {
-  border: 1px solid #fecdd3;
-  background: #fff1f2;
-  color: #be123c;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  background: rgba(127, 29, 29, 0.24);
+  color: #fecaca;
 }
 
 .danger-button:hover {
-  background: #ffe4e6;
+  background: rgba(153, 27, 27, 0.34);
 }
 
 .maplibregl-map {
@@ -93,6 +121,14 @@ button:disabled {
   padding: 0;
   direction: rtl;
   text-align: right;
+  background: #0d1b32;
+  border: 1px solid rgba(226, 185, 59, 0.3);
+  box-shadow: 0 18px 50px rgba(2, 6, 23, 0.32);
+}
+
+.maplibregl-popup-tip {
+  border-top-color: #0d1b32 !important;
+  border-bottom-color: #0d1b32 !important;
 }
 
 .map-popup {
@@ -111,11 +147,11 @@ button:disabled {
 
 .map-popup__title {
   font-weight: 900;
-  color: #0f172a;
+  color: #f8fafc;
 }
 
 .map-popup__body {
-  color: #475569;
+  color: var(--muted);
   font-size: 0.85rem;
   line-height: 1.7;
 }
@@ -128,8 +164,8 @@ button:disabled {
 
 .map-popup__button {
   border-radius: 0.375rem;
-  background: #0f766e;
-  color: white;
+  background: var(--gold);
+  color: #08111f;
   font-size: 0.8rem;
   font-weight: 800;
   padding: 0.45rem 0.65rem;
@@ -137,6 +173,89 @@ button:disabled {
 }
 
 .map-popup__button--light {
-  background: #e2e8f0;
-  color: #0f172a;
+  background: rgba(148, 163, 184, 0.16);
+  color: #f8fafc;
+}
+
+input,
+select,
+textarea {
+  border-color: rgba(148, 163, 184, 0.28) !important;
+  background: rgba(8, 18, 34, 0.78) !important;
+  color: #f8fafc !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #8fa2bd !important;
+}
+
+option {
+  background: #0d1b32;
+  color: #f8fafc;
+}
+
+.bg-slate-100,
+.bg-slate-50,
+.bg-white,
+.bg-white\/95 {
+  background-color: rgba(13, 27, 50, 0.88) !important;
+}
+
+.bg-teal-50,
+.bg-blue-50,
+.bg-amber-50 {
+  background-color: rgba(229, 181, 59, 0.12) !important;
+}
+
+.bg-rose-50 {
+  background-color: rgba(127, 29, 29, 0.22) !important;
+}
+
+.bg-slate-200 {
+  background-color: rgba(148, 163, 184, 0.16) !important;
+}
+
+.bg-teal-700 {
+  background: linear-gradient(135deg, #0f9f7a, #087968) !important;
+}
+
+.border-slate-100,
+.border-slate-200,
+.border-slate-300,
+.border-teal-100,
+.border-teal-200,
+.border-blue-200,
+.border-amber-200,
+.border-rose-200 {
+  border-color: var(--border) !important;
+}
+
+.text-slate-950,
+.text-slate-900,
+.text-slate-800,
+.text-blue-950,
+.text-blue-900,
+.text-teal-950,
+.text-teal-900,
+.text-amber-950 {
+  color: #f8fafc !important;
+}
+
+.text-slate-700,
+.text-slate-600,
+.text-blue-800,
+.text-teal-800,
+.text-amber-800 {
+  color: var(--muted-strong) !important;
+}
+
+.text-slate-500,
+.text-teal-700,
+.text-rose-800 {
+  color: var(--muted) !important;
+}
+
+.shadow-sm {
+  box-shadow: 0 16px 45px rgba(2, 6, 23, 0.2) !important;
 }
