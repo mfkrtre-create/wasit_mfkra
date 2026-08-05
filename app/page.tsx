@@ -6,11 +6,14 @@ import {
   Building2,
   Calculator,
   CalendarClock,
+  Camera,
   CheckCircle2,
   CircleDollarSign,
   ClipboardCopy,
+  Eye,
   Filter,
   History,
+  Image as ImageIcon,
   LayoutDashboard,
   MapPinned,
   MessageCircle,
@@ -23,6 +26,7 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
+  UploadCloud,
   UserPlus,
   Users,
   WandSparkles,
@@ -33,6 +37,7 @@ import {
 import { LocationPicker } from "@/components/LocationPicker";
 import { RealEstateMap } from "@/components/RealEstateMap";
 import { filterMapRecords, type MapRecord } from "@/lib/map-records";
+import { formatArea, parseOptionalPositiveDecimal, parseOptionalPositiveInteger } from "@/lib/number-utils";
 import { type PropertyData } from "@/lib/property-schema";
 
 type ViewId =
@@ -44,7 +49,7 @@ type ViewId =
   | "clients"
   | "admin";
 
-type ProfileSection = "settings" | "auth" | "reminders" | "notifications" | "sharing" | "trash";
+type ProfileSection = "settings" | "reminders" | "notifications" | "sharing" | "trash";
 type RecordKind = "offer" | "request";
 type OfferStatus = "for_sale" | "for_rent" | "sold_or_rented" | "archived";
 type RequestStatus = "purchase" | "rental" | "fulfilled" | "archived";
@@ -96,6 +101,7 @@ type PropertyRecord = {
   reminderDays: number;
   notes: string;
   tags: string[];
+  images: PropertyImage[];
   source: "manual" | "ai-text" | "ai-voice";
   lat: number | null;
   lng: number | null;
@@ -103,6 +109,13 @@ type PropertyRecord = {
   updatedAt: string;
   sharedAt: string | null;
   deletedAt: string | null;
+};
+
+type PropertyImage = {
+  id: string;
+  url: string;
+  name: string;
+  main: boolean;
 };
 
 type ClientRecord = {
@@ -211,7 +224,6 @@ const viewTitles: Record<ViewId, string> = {
 
 const profileSections: Array<{ id: ProfileSection; label: string; icon: LucideIcon }> = [
   { id: "settings", label: "الحساب", icon: ShieldCheck },
-  { id: "auth", label: "الدخول والتسجيل", icon: UserPlus },
   { id: "reminders", label: "التذكيرات", icon: CalendarClock },
   { id: "notifications", label: "الإشعارات", icon: Bell },
   { id: "sharing", label: "المشاركة", icon: Share2 },
@@ -328,13 +340,11 @@ function normalizePhone(phone: string) {
 }
 
 function optionalPositiveNumber(value: FormDataEntryValue | string | null | undefined) {
-  const parsed = Number(value || 0);
-  return parsed > 0 && Number.isFinite(parsed) ? parsed : null;
+  return parseOptionalPositiveDecimal(value);
 }
 
 function optionalInteger(value: FormDataEntryValue | string | null | undefined) {
-  const parsed = Number(value || 0);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  return parseOptionalPositiveInteger(value);
 }
 
 function recordAmount(record: PropertyRecord) {
@@ -415,6 +425,7 @@ function normalizeWorkspaceState(state: WorkspaceState): WorkspaceState {
       ownerPhone: record.ownerPhone ?? record.contact ?? "",
       falLicense: record.falLicense ?? "",
       reminderDays: Number(record.reminderDays) > 0 ? Number(record.reminderDays) : 14,
+      images: Array.isArray(record.images) ? record.images : [],
     })),
     clients: Array.isArray(state.clients) ? state.clients : [],
     reminders: Array.isArray(state.reminders) ? state.reminders : [],
@@ -489,6 +500,7 @@ function mapAiToRecord(data: PropertyData, source: "ai-text" | "ai-voice", clien
     reminderDays: 14,
     notes: data.description ?? "",
     tags: data.missingFields.length > 0 ? ["يحتاج مراجعة"] : ["مدخل AI"],
+    images: [],
     source,
     lat: null,
     lng: null,
@@ -545,7 +557,11 @@ export default function Home() {
   const [quickArea, setQuickArea] = useState("");
   const [quickBasePriceMode, setQuickBasePriceMode] = useState<"limit" | "asking">("limit");
   const [quickFacades, setQuickFacades] = useState<string[]>([]);
+  const [quickImages, setQuickImages] = useState<PropertyImage[]>([]);
   const [expandedClientId, setExpandedClientId] = useState<string | null>(null);
+  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [aiProgress, setAiProgress] = useState("");
   const [clockNow, setClockNow] = useState(0);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -745,6 +761,11 @@ export default function Home() {
 
   function selectMapRecord(recordId: string) {
     setSelectedShareId(recordId);
+    const record = activeRecords.find((item) => item.id === recordId);
+    if (record) {
+      setView(record.kind === "offer" ? "offers" : "requests");
+      setSelectedRecordId(recordId);
+    }
     window.setTimeout(() => {
       document.getElementById(`record-${recordId}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
     }, 30);
@@ -756,7 +777,7 @@ export default function Home() {
     }
 
     setView("admin");
-    setProfileSection("auth");
+    setProfileSection("settings");
     setAuthMessage("سجل الدخول أولاً للوصول إلى بياناتك وتنفيذ هذا الإجراء.");
     return false;
   }
@@ -1052,9 +1073,9 @@ export default function Home() {
 
     const selectedClientId = String(formData.get("clientId") ?? "");
     const title = String(formData.get("title") ?? "").trim();
-    const priceValue = Number(formData.get("price") || 0);
-    const askingPriceValue = Number(formData.get("askingPrice") || 0);
-    const areaValue = Number(formData.get("area") || 0);
+    const priceValue = optionalPositiveNumber(formData.get("price"));
+    const askingPriceValue = optionalPositiveNumber(formData.get("askingPrice"));
+    const areaValue = optionalPositiveNumber(formData.get("area"));
     const latitudeValue = Number(formData.get("latitude") || Number.NaN);
     const longitudeValue = Number(formData.get("longitude") || Number.NaN);
     const hasCoordinates = hasUsableCoordinates(latitudeValue, longitudeValue);
@@ -1067,8 +1088,9 @@ export default function Home() {
     const ownerName = String(formData.get("ownerName") || "").trim();
     const ownerPhone = normalizePhone(String(formData.get("ownerPhone") || ""));
     const reminderDays = Number(formData.get("reminderDays") || workspace.profile.defaultReminderDays || 14);
-    const generatedClientId = !selectedClientId && ownerName ? makeId("client") : "";
-    const clientId = selectedClientId || generatedClientId;
+    const existingClient = ownerPhone ? workspace.clients.find((client) => normalizePhone(client.phone) === ownerPhone) : null;
+    const generatedClientId = !selectedClientId && !existingClient && ownerName ? makeId("client") : "";
+    const clientId = selectedClientId || existingClient?.id || generatedClientId;
     const createdAt = nowIso();
     const record: PropertyRecord = {
       id: makeId("rec"),
@@ -1081,10 +1103,10 @@ export default function Home() {
         : defaultStatusForRecord(kind, transaction),
       city: String(formData.get("city") || "الرياض"),
       district: String(formData.get("district") || "غير محدد"),
-      area: areaValue > 0 ? areaValue : null,
-      price: kind === "offer" && priceValue > 0 ? priceValue : null,
-      askingPrice: kind === "offer" && askingPriceValue > 0 ? askingPriceValue : null,
-      budget: kind === "request" && priceValue > 0 ? priceValue : null,
+      area: areaValue,
+      price: kind === "offer" ? priceValue : null,
+      askingPrice: kind === "offer" ? askingPriceValue : null,
+      budget: kind === "request" ? priceValue : null,
       category: String(formData.get("category") || ""),
       propertyAge: String(formData.get("propertyAge") || ""),
       basePriceMode: formData.get("basePriceMode") === "asking" ? "asking" : "limit",
@@ -1106,6 +1128,7 @@ export default function Home() {
       reminderDays: Number.isFinite(reminderDays) && reminderDays > 0 ? reminderDays : 14,
       notes: String(formData.get("notes") || ""),
       tags: kind === "offer" ? ["عرض يدوي"] : ["طلب يدوي"],
+      images: quickImages,
       source: "manual",
       lat: hasCoordinates ? latitudeValue : null,
       lng: hasCoordinates ? longitudeValue : null,
@@ -1164,6 +1187,8 @@ export default function Home() {
     setQuickAskingPrice("");
     setQuickArea("");
     setQuickFacades([]);
+    setQuickImages([]);
+    setSelectedRecordId(record.id);
     addNotification("تم إنشاء سجل", `تم حفظ ${recordKindLabels[kind]}: ${record.title}`, "success");
   }
 
@@ -1284,6 +1309,7 @@ export default function Home() {
     setAiResult(null);
     setAiSource("ai-text");
     setAiError(null);
+    setAiProgress("");
   }
 
   async function analyzeText(value = aiText) {
@@ -1299,12 +1325,17 @@ export default function Home() {
 
     setAiBusy(true);
     setAiError(null);
+    setAiProgress("جاري تحليل الرسالة...");
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 25000);
     try {
       const response = await fetch("/api/extract-property", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: cleanText }),
+        signal: controller.signal,
       });
+      setAiProgress("جاري تجهيز البيانات...");
       const body = await readJsonResponse<PropertyData>(response);
       if (!response.ok) {
         throw new Error(body.error ?? "فشل تحليل النص.");
@@ -1312,8 +1343,10 @@ export default function Home() {
       setAiSource("ai-text");
       setAiResult(body);
     } catch (error) {
-      setAiError(error instanceof Error ? error.message : "حدث خطأ غير متوقع.");
+      setAiError(error instanceof DOMException && error.name === "AbortError" ? "طال تحليل الرسالة. بقي النص محفوظاً ويمكنك إعادة المحاولة." : error instanceof Error ? error.message : "حدث خطأ غير متوقع.");
     } finally {
+      window.clearTimeout(timeout);
+      setAiProgress("");
       setAiBusy(false);
     }
   }
@@ -1325,6 +1358,7 @@ export default function Home() {
 
     setAiBusy(true);
     setAiError(null);
+    setAiProgress("جاري تحويل الصوت إلى نص...");
     try {
       const formData = new FormData();
       formData.append("audio", audio, filename);
@@ -1335,12 +1369,41 @@ export default function Home() {
       }
       setAiText(body.text);
       setAiSource("ai-voice");
+      setAiProgress("جاري تحليل النص المستخرج...");
       await analyzeText(body.text);
     } catch (error) {
       setAiError(error instanceof Error ? error.message : "حدث خطأ غير متوقع.");
     } finally {
       setAiBusy(false);
     }
+  }
+
+  async function uploadPropertyImage(file: File) {
+    if (!requireAuthenticatedAction()) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setAuthMessage("لا يدعم النظام هذا النوع من الملفات. اختر صورة فقط.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setAuthMessage("حجم الصورة يجب ألا يتجاوز 5MB.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("image", file);
+    const response = await fetch("/api/property-images", { method: "POST", body: formData });
+    const body = await readJsonResponse<{ image: PropertyImage }>(response);
+    if (!response.ok || !body.image) {
+      setAuthMessage(body.error ?? "تعذر رفع الصورة.");
+      return;
+    }
+
+    setQuickImages((current) => [...current, { ...body.image, main: current.length === 0 }]);
+    setAuthMessage("تم رفع الصورة وإضافتها إلى المعاينة.");
   }
 
   async function startAudioRecording() {
@@ -1420,7 +1483,7 @@ export default function Home() {
       ].slice(0, 200),
     }));
     setSelectedShareId(record.id);
-    setView(record.kind === "offer" ? "offers" : "requests");
+    setSelectedRecordId(record.id);
     setQuickAddOpen(false);
     addNotification("تم حفظ إدخال AI", `تم تحويل النص إلى ${recordKindLabels[record.kind]} قابل للمراجعة.`, "success");
     resetAiEntry();
@@ -1565,6 +1628,7 @@ export default function Home() {
   function renderRecordCard(record: PropertyRecord) {
     const client = workspace.clients.find((item) => item.id === record.clientId);
     const pricePerMeter = recordPricePerMeter(record);
+    const mainImage = record.images.find((image) => image.main) ?? record.images[0] ?? null;
     const cardTone =
       record.status === "archived"
         ? "border-slate-600/35"
@@ -1574,10 +1638,20 @@ export default function Home() {
             ? "border-amber-300/35"
             : "border-sky-400/35";
     return (
-      <article key={record.id} className={`relative overflow-hidden rounded-2xl border bg-[#0f1c34]/92 p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-amber-300/55 ${cardTone}`}>
+      <article
+        key={record.id}
+        id={`record-${record.id}`}
+        onClick={() => setSelectedRecordId(record.id)}
+        className={`relative cursor-pointer overflow-hidden rounded-2xl border bg-[#0f1c34]/92 p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-amber-300/55 ${cardTone}`}
+      >
         <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-l from-amber-300 via-emerald-400 to-sky-400 opacity-70" />
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
+          <div className="flex min-w-0 flex-1 gap-3">
+            {mainImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={mainImage.url} alt={record.title} className="h-20 w-24 shrink-0 rounded-lg border border-slate-600/30 object-cover" />
+            ) : null}
+            <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full border border-slate-500/25 bg-slate-900/40 px-3 py-1 text-xs font-bold text-slate-200">
                 {recordKindLabels[record.kind]}
@@ -1590,11 +1664,12 @@ export default function Home() {
             <p className="mt-1 text-sm text-slate-400">
               {record.city}، {record.district} | {record.propertyType} | {record.transaction}
             </p>
+            </div>
           </div>
           <p className="rounded-2xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-lg font-black text-amber-100">{formatMoney(recordAmount(record))}</p>
         </div>
         <div className="mt-4 grid gap-2 text-sm text-slate-300 sm:grid-cols-2 xl:grid-cols-4">
-          <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">المساحة: {record.area ? `${record.area} م²` : "غير محدد"}</span>
+          <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">المساحة: {formatArea(record.area)}</span>
           <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">السوم: {formatMoney(record.askingPrice)}</span>
           <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">سعر المتر: {pricePerMeter ? formatMoney(pricePerMeter) : "غير محدد"}</span>
           <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">الواجهة: {record.facades.join("، ") || record.facade || "غير محدد"}</span>
@@ -1605,16 +1680,16 @@ export default function Home() {
         </div>
         <p className="mt-3 line-clamp-2 text-sm leading-7 text-slate-300">{record.notes || "لا توجد ملاحظات."}</p>
         <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" onClick={() => addReminder(record.id)} className="action-button">
+          <button type="button" onClick={(event) => { event.stopPropagation(); addReminder(record.id); }} className="action-button">
             <CalendarClock className="size-4" aria-hidden="true" />
             تذكير
           </button>
           <button
             type="button"
-            onClick={() => {
+            onClick={(event) => {
+              event.stopPropagation();
               setSelectedShareId(record.id);
-              setProfileSection("sharing");
-              setView("admin");
+              setShareModalOpen(true);
             }}
             className="action-button"
           >
@@ -1623,16 +1698,20 @@ export default function Home() {
           </button>
           <button
             type="button"
-            onClick={() => setEditingRecordId((current) => (current === record.id ? null : record.id))}
+            onClick={(event) => { event.stopPropagation(); setEditingRecordId((current) => (current === record.id ? null : record.id)); }}
             className="action-button"
           >
             <WandSparkles className="size-4" aria-hidden="true" />
             تعديل
           </button>
+          <button type="button" onClick={(event) => { event.stopPropagation(); setSelectedRecordId(record.id); }} className="action-button">
+            <Eye className="size-4" aria-hidden="true" />
+            عرض التفاصيل
+          </button>
           {record.kind === "offer" && view === "offers" ? (
             <button
             type="button"
-            onClick={() => setExpandedCalculatorRecordId((current) => (current === record.id ? null : record.id))}
+            onClick={(event) => { event.stopPropagation(); setExpandedCalculatorRecordId((current) => (current === record.id ? null : record.id)); }}
               className="action-button border-amber-300/35 bg-amber-300/10 text-amber-100 hover:border-amber-300/60"
             >
               <Calculator className="size-4" aria-hidden="true" />
@@ -1641,6 +1720,7 @@ export default function Home() {
           ) : null}
           <select
             value={record.status}
+            onClick={(event) => event.stopPropagation()}
             onChange={(event) => updateRecord(record.id, { status: event.target.value as RecordStatus })}
             className="h-10 rounded-xl border border-slate-600/40 bg-slate-950/30 px-3 text-sm"
           >
@@ -1652,7 +1732,8 @@ export default function Home() {
           </select>
           <button
             type="button"
-            onClick={() => {
+            onClick={(event) => {
+              event.stopPropagation();
               if (window.confirm(`سيُنقل "${record.title}" إلى سلة المهملات ويمكن استعادته خلال 30 يوماً. هل تريد المتابعة؟`)) {
                 updateRecord(record.id, { deletedAt: nowIso() });
               }
@@ -1666,6 +1747,7 @@ export default function Home() {
         {editingRecordId === record.id ? (
           <form
             className="mt-4 grid gap-3 rounded-2xl border border-slate-500/20 bg-slate-950/20 p-3 md:grid-cols-3"
+            onClick={(event) => event.stopPropagation()}
             onSubmit={(event) => {
               event.preventDefault();
               updateRecordFromForm(record.id, new FormData(event.currentTarget));
@@ -1676,16 +1758,16 @@ export default function Home() {
             <input name="district" defaultValue={record.district} placeholder="الحي" className={fieldClass()} />
             <input name="propertyType" defaultValue={record.propertyType} placeholder="نوع العقار" className={fieldClass()} />
             <input name="transaction" defaultValue={record.transaction} placeholder="نوع العملية" className={fieldClass()} />
-            <input name="price" type="number" min="0" defaultValue={recordAmount(record) ?? ""} placeholder={record.kind === "offer" ? "السعر" : "الميزانية"} className={fieldClass()} />
-            {record.kind === "offer" ? <input name="askingPrice" type="number" min="0" defaultValue={record.askingPrice ?? ""} placeholder="السوم" className={fieldClass()} /> : null}
-            <input name="area" type="number" min="0" defaultValue={record.area ?? ""} placeholder="المساحة" className={fieldClass()} />
+            <input name="price" type="number" min="0" step="0.01" defaultValue={recordAmount(record) ?? ""} placeholder={record.kind === "offer" ? "السعر" : "الميزانية"} className={fieldClass()} />
+            {record.kind === "offer" ? <input name="askingPrice" type="number" min="0" step="0.01" defaultValue={record.askingPrice ?? ""} placeholder="السوم" className={fieldClass()} /> : null}
+            <input name="area" type="number" min="0" step="0.01" defaultValue={record.area ?? ""} placeholder="المساحة" className={fieldClass()} />
             <select name="basePriceMode" defaultValue={record.basePriceMode} className={fieldClass()}>
               <option value="limit">احتساب سعر المتر من الحد</option>
               <option value="asking">احتساب سعر المتر من السوم</option>
             </select>
             <input name="category" defaultValue={record.category} placeholder="التصنيف" className={fieldClass()} />
             <input name="propertyAge" defaultValue={record.propertyAge} placeholder="عمر العقار" className={fieldClass()} />
-            <input name="streetWidth" type="number" min="0" defaultValue={record.streetWidth ?? ""} placeholder="عرض الشارع" className={fieldClass()} />
+            <input name="streetWidth" type="number" min="0" step="0.01" defaultValue={record.streetWidth ?? ""} placeholder="عرض الشارع" className={fieldClass()} />
             <input name="facade" defaultValue={record.facade} placeholder="الواجهة" className={fieldClass()} />
             <input name="lengths" defaultValue={record.lengths} placeholder="الأطوال" className={fieldClass()} />
             <input name="planNumber" defaultValue={record.planNumber} placeholder="رقم المخطط" className={fieldClass()} />
@@ -1979,16 +2061,75 @@ export default function Home() {
                 <section className="grid gap-3 rounded-2xl border border-slate-600/25 bg-[#0f1c34] p-4">
                   <h3 className="font-black text-amber-100">السعر والمساحة</h3>
                   <div className="grid gap-3 md:grid-cols-3">
-                    <input name="price" type="number" min="0" value={quickLimitPrice} onChange={(event) => setQuickLimitPrice(event.target.value)} placeholder={quickKind === "offer" ? "سعر البيع / الحد" : "الميزانية القصوى"} className={fieldClass()} />
-                    {quickKind === "offer" ? <input name="askingPrice" type="number" min="0" value={quickAskingPrice} onChange={(event) => setQuickAskingPrice(event.target.value)} placeholder="سعر السوم" className={fieldClass()} /> : null}
-                    <input name="area" type="number" min="0" value={quickArea} onChange={(event) => setQuickArea(event.target.value)} placeholder="المساحة م²" className={fieldClass()} />
+                    <Field label={quickKind === "offer" ? "سعر البيع / الحد (ريال)" : "الميزانية القصوى (ريال)"}>
+                      <input name="price" type="number" min="0" step="0.01" value={quickLimitPrice} onChange={(event) => setQuickLimitPrice(event.target.value)} placeholder="0" className={fieldClass()} />
+                    </Field>
                     {quickKind === "offer" ? (
-                      <select name="basePriceMode" value={quickBasePriceMode} onChange={(event) => setQuickBasePriceMode(event.target.value as "limit" | "asking")} className={fieldClass()}>
-                        <option value="limit">السعر الأساسي: الحد</option><option value="asking">السعر الأساسي: السوم</option>
-                      </select>
+                      <Field label="سعر السوم (ريال)">
+                        <input name="askingPrice" type="number" min="0" step="0.01" value={quickAskingPrice} onChange={(event) => setQuickAskingPrice(event.target.value)} placeholder="0" className={fieldClass()} />
+                      </Field>
+                    ) : null}
+                    <Field label="المساحة (م²)">
+                      <input name="area" type="number" min="0" step="0.01" value={quickArea} onChange={(event) => setQuickArea(event.target.value)} placeholder="مثال 344.5" className={fieldClass()} />
+                    </Field>
+                    {quickKind === "offer" ? (
+                      <Field label="السعر الأساسي للحساب">
+                        <select name="basePriceMode" value={quickBasePriceMode} onChange={(event) => setQuickBasePriceMode(event.target.value as "limit" | "asking")} className={fieldClass()}>
+                          <option value="limit">الحد</option><option value="asking">السوم</option>
+                        </select>
+                      </Field>
                     ) : <input type="hidden" name="basePriceMode" value="limit" />}
                     <div className="flex h-11 items-center rounded-xl border border-emerald-300/25 bg-emerald-400/10 px-3 text-sm font-black text-emerald-100">سعر المتر: {pricePerMeter ? formatMoney(pricePerMeter) : "يُحسب تلقائياً"}</div>
                   </div>
+                </section>
+
+                <section className="grid gap-3 rounded-2xl border border-slate-600/25 bg-[#0f1c34] p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="font-black text-amber-100">صور العقار</h3>
+                      <p className="mt-1 text-xs font-bold text-slate-400">اختياري. JPG/PNG/WebP حتى 5MB للصورة.</p>
+                    </div>
+                    <label className="secondary-button cursor-pointer">
+                      <Camera className="size-4" aria-hidden="true" />
+                      <span>الكاميرا/المعرض</span>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        capture="environment"
+                        multiple
+                        className="sr-only"
+                        onChange={(event) => {
+                          const files = Array.from(event.target.files ?? []);
+                          event.currentTarget.value = "";
+                          void Promise.all(files.map(uploadPropertyImage));
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {quickImages.length > 0 ? (
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      {quickImages.map((image) => (
+                        <div key={image.id} className="overflow-hidden rounded-xl border border-slate-600/30 bg-slate-950/25">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={image.url} alt={image.name} className="h-32 w-full object-cover" />
+                          <div className="grid gap-2 p-2">
+                            <button type="button" onClick={() => setQuickImages((current) => current.map((item) => ({ ...item, main: item.id === image.id })))} className={image.main ? "primary-button justify-center" : "secondary-button justify-center"}>
+                              <ImageIcon className="size-4" aria-hidden="true" />
+                              {image.main ? "الصورة الرئيسية" : "اجعلها رئيسية"}
+                            </button>
+                            <button type="button" onClick={() => setQuickImages((current) => current.filter((item) => item.id !== image.id))} className="danger-button justify-center">
+                              إزالة
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-slate-600/35 bg-slate-950/20 p-4 text-sm font-bold text-slate-400">
+                      <UploadCloud className="mb-2 size-5 text-amber-200" aria-hidden="true" />
+                      لم تتم إضافة صور بعد.
+                    </div>
+                  )}
                 </section>
 
                 <section className="grid gap-3 rounded-2xl border border-slate-600/25 bg-[#0f1c34] p-4">
@@ -2087,6 +2228,7 @@ export default function Home() {
             </div>
           </div>
           {isRecording ? <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-800">التسجيل يعمل الآن... تحدث ثم اضغط إيقاف التسجيل.</p> : null}
+          {aiProgress ? <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-900">{aiProgress}</p> : null}
           {aiError ? <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-800">{aiError}</p> : null}
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -2569,6 +2711,101 @@ export default function Home() {
     );
   }
 
+  function renderShareModal() {
+    if (!shareModalOpen) {
+      return null;
+    }
+
+    return (
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/75 p-3 backdrop-blur" role="dialog" aria-modal="true">
+        <div className="mx-auto max-w-4xl rounded-2xl border border-slate-600/35 bg-[#0a162a] shadow-2xl">
+          <div className="sticky top-0 z-10 flex items-center justify-between gap-3 rounded-t-2xl border-b border-slate-600/30 bg-[#0a162a]/95 p-4">
+            <div>
+              <p className="text-xs font-bold text-amber-300">مشاركة من نفس الصفحة</p>
+              <h2 className="text-xl font-black text-white">{selectedShareRecord?.title ?? "مشاركة عقارية"}</h2>
+            </div>
+            <button type="button" onClick={() => setShareModalOpen(false)} className="secondary-button" aria-label="إغلاق المشاركة">
+              <X className="size-5" aria-hidden="true" />
+            </button>
+          </div>
+          <div className="p-4">{renderSharing()}</div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderRecordDetailsModal() {
+    const record = selectedRecordId ? activeRecords.find((item) => item.id === selectedRecordId) : null;
+    if (!record) {
+      return null;
+    }
+
+    const client = workspace.clients.find((item) => item.id === record.clientId);
+    const pricePerMeter = recordPricePerMeter(record);
+
+    return (
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/75 p-3 backdrop-blur" role="dialog" aria-modal="true">
+        <div className="mx-auto max-w-4xl rounded-2xl border border-slate-600/35 bg-[#0a162a] shadow-2xl">
+          <div className="sticky top-0 z-10 flex items-center justify-between gap-3 rounded-t-2xl border-b border-slate-600/30 bg-[#0a162a]/95 p-4">
+            <div>
+              <p className="text-xs font-bold text-amber-300">{recordKindLabels[record.kind]} | {statusLabels[record.status]}</p>
+              <h2 className="text-2xl font-black text-white">{record.title}</h2>
+            </div>
+            <button type="button" onClick={() => setSelectedRecordId(null)} className="secondary-button" aria-label="إغلاق التفاصيل">
+              <X className="size-5" aria-hidden="true" />
+            </button>
+          </div>
+          <div className="grid gap-4 p-4">
+            {record.images.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-3">
+                {record.images.map((image) => (
+                  <div key={image.id} className="contents">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={image.url} alt={image.name} className="h-44 w-full rounded-lg border border-slate-600/30 object-cover" />
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Info label="النوع" value={record.propertyType} />
+              <Info label="الموقع" value={`${record.city}، ${record.district}`} />
+              <Info label={record.kind === "offer" ? "السعر/الحد" : "الميزانية"} value={formatMoney(recordAmount(record))} />
+              <Info label="المساحة" value={formatArea(record.area)} />
+              <Info label="السوم" value={formatMoney(record.askingPrice)} />
+              <Info label="سعر المتر" value={pricePerMeter ? formatMoney(pricePerMeter) : "غير محدد"} />
+              <Info label="الواجهة" value={record.facades.join("، ") || record.facade || "غير محدد"} />
+              <Info label="عرض الشارع" value={record.streetWidth ? `${record.streetWidth} متر` : "غير محدد"} />
+              <Info label="المخطط" value={record.planNumber || "غير محدد"} />
+              <Info label="البلك/القطعة" value={[record.blockNumber, record.plotNumber].filter(Boolean).join(" / ") || "غير محدد"} />
+              <Info label="رخصة فال" value={record.falLicense || authUser?.falLicense || "غير مضافة"} />
+              <Info label="رقم الإعلان" value={record.license || "غير مضاف"} />
+              <Info label="العميل" value={client?.name || record.ownerName || "غير مرتبط"} />
+              <Info label="الجوال" value={client?.phone || record.ownerPhone || record.contact || "غير مضاف"} />
+              <Info label="آخر تحديث" value={formatDateTime(record.updatedAt, workspace.profile.timezone)} />
+              <Info label="مهلة التذكير" value={`${record.reminderDays} يوم`} />
+            </div>
+            <div className="rounded-xl border border-slate-600/25 bg-slate-950/25 p-4">
+              <p className="text-xs font-bold text-slate-400">النص والملاحظات</p>
+              <p className="mt-2 whitespace-pre-wrap leading-8 text-slate-100">{record.notes || "لا توجد ملاحظات."}</p>
+            </div>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={() => { setSelectedRecordId(null); setEditingRecordId(record.id); window.setTimeout(() => document.getElementById(`record-${record.id}`)?.scrollIntoView({ block: "center", behavior: "smooth" }), 30); }} className="secondary-button">
+                تعديل
+              </button>
+              <button type="button" onClick={() => { setSelectedShareId(record.id); setShareModalOpen(true); }} className="primary-button">
+                <Share2 className="size-4" aria-hidden="true" />
+                مشاركة
+              </button>
+              <button type="button" onClick={() => { setSelectedRecordId(null); setQuickKind(record.kind); setQuickEntryMode("manual"); setQuickAddOpen(true); }} className="secondary-button">
+                إضافة آخر
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   function renderTrash() {
     return (
       <Panel title="سلة المهملات - حذف ناعم 30 يوماً">
@@ -2915,19 +3152,39 @@ export default function Home() {
                 className="grid gap-3 border-t border-slate-600/25 pt-3"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  const data = new FormData(event.currentTarget);
+                  const form = event.currentTarget;
+                  void (async () => {
+                  const data = new FormData(form);
                   const days = Number(data.get("defaultReminderDays") || 14);
+                  const timezone = String(data.get("timezone") || riyadhTimezone);
+                  const name = String(data.get("name") || workspace.profile.name).trim();
+                  const falLicense = String(data.get("falLicense") || "").trim();
+                  const response = await fetch("/api/auth/profile", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name, falLicense, timezone }),
+                  });
+                  const body = await readJsonResponse<{ user: AuthUser; message?: string }>(response);
+                  if (!response.ok || !body.user) {
+                    addNotification("تعذر حفظ الملف", body.error ?? "لم يتم حفظ بيانات الملف الشخصي.", "warning");
+                    return;
+                  }
+                  setAuthUser(body.user);
                   setWorkspace((current) => ({
                     ...current,
                     profile: {
                       ...current.profile,
-                      timezone: String(data.get("timezone") || riyadhTimezone),
+                      name,
+                      timezone,
                       defaultReminderDays: days > 0 ? days : 14,
                     },
                   }));
-                  addNotification("تم حفظ الإعدادات", "تم تحديث المنطقة الزمنية ومدة التذكير الافتراضية.", "success");
+                  addNotification("تم حفظ الإعدادات", body.message ?? "تم تحديث بيانات الملف والإعدادات.", "success");
+                  })();
                 }}
               >
+                <label className="grid gap-2 text-sm font-bold text-slate-300">اسم الوسيط<input name="name" defaultValue={authUser?.name || workspace.profile.name} className={fieldClass()} /></label>
+                <label className="grid gap-2 text-sm font-bold text-slate-300">رخصة فال<input name="falLicense" defaultValue={authUser?.falLicense || ""} className={fieldClass()} /></label>
                 <label className="grid gap-2 text-sm font-bold text-slate-300">المنطقة الزمنية<select name="timezone" defaultValue={workspace.profile.timezone} className={fieldClass()}><option value="Asia/Riyadh">Asia/Riyadh</option><option value="Asia/Beirut">Asia/Beirut</option><option value="Asia/Dubai">Asia/Dubai</option></select></label>
                 <label className="grid gap-2 text-sm font-bold text-slate-300">مهلة التحديث الافتراضية بالأيام<input name="defaultReminderDays" type="number" min="1" defaultValue={workspace.profile.defaultReminderDays} className={fieldClass()} /></label>
                 <button type="submit" className="primary-button justify-center">حفظ الإعدادات</button>
@@ -2955,7 +3212,6 @@ export default function Home() {
           </Panel>
         </section>
       ),
-      auth: renderAuthControls(),
       reminders: renderReminders(),
       notifications: renderNotifications(),
       sharing: renderSharing(),
@@ -3088,9 +3344,9 @@ export default function Home() {
                   <Sparkles className="size-4" aria-hidden="true" />
                   إدخال AI
                 </button>
-                <button type="button" onClick={() => setView("admin")} className="secondary-button">
-                  <ShieldCheck className="size-4" aria-hidden="true" />
-                  الملف الشخصي
+                <button type="button" onClick={() => { setProfileSection("notifications"); setView("admin"); }} className="secondary-button" aria-label="الإشعارات">
+                  <Bell className="size-4" aria-hidden="true" />
+                  الإشعارات
                   {unreadNotifications > 0 ? <span className="rounded-full bg-amber-400 px-2 py-0.5 text-xs text-slate-950">{unreadNotifications}</span> : null}
                 </button>
                 <button type="button" onClick={signOut} className="secondary-button">
@@ -3098,34 +3354,44 @@ export default function Home() {
                 </button>
               </div>
             </div>
-            <div className="mt-3 flex gap-2 overflow-x-auto pb-1 lg:hidden">
-              {navItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setView(item.id)}
-                  className={[
-                    "h-10 shrink-0 rounded-xl px-3 text-sm font-bold",
-                    view === item.id ? "bg-amber-300 text-slate-950" : "bg-slate-800/80 text-slate-200",
-                  ].join(" ")}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
           </header>
-          <div className="p-4 lg:p-6">{renderContent()}</div>
+          <div className="p-4 pb-28 lg:p-6">{renderContent()}</div>
         </div>
       </div>
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-700/40 bg-[#0a162a]/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-2xl backdrop-blur lg:hidden" aria-label="التنقل الرئيسي للجوال">
+        <div className="grid grid-cols-5 gap-1">
+          {navItems.filter((item) => item.id !== "clients").map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setView(item.id)}
+                className={[
+                  "relative flex h-14 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-black transition",
+                  view === item.id ? "bg-amber-300 text-slate-950" : "text-slate-300 hover:bg-slate-800/80 hover:text-white",
+                ].join(" ")}
+              >
+                {view === item.id ? <span className="absolute top-0 h-0.5 w-8 rounded-full bg-slate-950/70" /> : null}
+                <Icon className="size-5" aria-hidden="true" />
+                <span>{item.label}</span>
+                {item.id === "dashboard" && dueReminders > 0 ? <span className="absolute end-2 top-1 rounded-full bg-red-500 px-1.5 text-[10px] text-white">{dueReminders}</span> : null}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
       <button
         type="button"
         onClick={() => { setQuickEntryMode("manual"); setQuickAddOpen(true); }}
-        className="fixed bottom-5 left-5 z-40 grid size-14 place-items-center rounded-2xl bg-amber-300 text-slate-950 shadow-xl shadow-black/30 transition hover:-translate-y-1 hover:bg-amber-200"
+        className="fixed bottom-24 left-5 z-40 grid size-14 place-items-center rounded-2xl bg-amber-300 text-slate-950 shadow-xl shadow-black/30 transition hover:-translate-y-1 hover:bg-amber-200 lg:bottom-5"
         aria-label="إضافة سريع"
       >
         <Plus className="size-7" aria-hidden="true" />
       </button>
       {renderQuickAddModal()}
+      {renderRecordDetailsModal()}
+      {renderShareModal()}
     </main>
   );
 }
@@ -3144,6 +3410,15 @@ function EmptyState({ label }: { label: string }) {
     <div className="rounded-2xl border border-dashed border-slate-600/35 bg-slate-950/20 p-8 text-center font-bold text-slate-400">
       {label}
     </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="grid gap-2 text-sm font-bold text-slate-300">
+      <span>{label}</span>
+      {children}
+    </label>
   );
 }
 

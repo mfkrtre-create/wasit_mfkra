@@ -35,7 +35,8 @@ describe("map page source", () => {
     expect(navBlock).not.toContain('id: "notifications"');
     expect(navBlock).not.toContain('id: "sharing"');
     expect(navBlock).not.toContain('id: "trash"');
-    expect(pageSource).toContain('type ProfileSection = "settings" | "auth" | "reminders" | "notifications" | "sharing" | "trash"');
+    expect(pageSource).toContain('type ProfileSection = "settings" | "reminders" | "notifications" | "sharing" | "trash"');
+    expect(pageSource).not.toContain('label: "الدخول والتسجيل"');
     expect(pageSource).toContain("تسجيل صوتي مباشر");
   });
 
@@ -137,6 +138,32 @@ describe("map page source", () => {
     expect(pageSource).toContain("الأداء خلال 6 أشهر");
   });
 
+  it("implements mobile bottom navigation, notification bell, details modal, and same-page share modal", () => {
+    const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
+    const mapSource = readFileSync(join(process.cwd(), "components", "RealEstateMap.tsx"), "utf8");
+
+    expect(pageSource).toContain('aria-label="التنقل الرئيسي للجوال"');
+    expect(pageSource).toContain("pb-[calc(0.5rem+env(safe-area-inset-bottom))]");
+    expect(pageSource).toContain('aria-label="الإشعارات"');
+    expect(pageSource).toContain("renderRecordDetailsModal");
+    expect(pageSource).toContain("setShareModalOpen(true)");
+    expect(pageSource).toContain("مشاركة من نفس الصفحة");
+    expect(mapSource).toContain("onOpenDetails(properties.id)");
+  });
+
+  it("keeps property images behind authenticated API routes and out of base64 database fields", () => {
+    const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
+    const imageApi = readFileSync(join(process.cwd(), "app", "api", "property-images", "route.ts"), "utf8");
+    const imageGetApi = readFileSync(join(process.cwd(), "app", "api", "property-images", "[id]", "route.ts"), "utf8");
+
+    expect(pageSource).toContain("quickImages");
+    expect(pageSource).toContain("/api/property-images");
+    expect(imageApi).toContain("requireAuthenticatedRequest()");
+    expect(imageApi).toContain("5 * 1024 * 1024");
+    expect(imageGetApi).toContain("startsWith(`${user.id}_`)");
+    expect(pageSource).not.toContain("readAsDataURL");
+  });
+
   it("supports OTP email activation and password recovery UI", () => {
     const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
     const registerRoute = readFileSync(join(process.cwd(), "app", "api", "auth", "register", "route.ts"), "utf8");
@@ -152,5 +179,17 @@ describe("map page source", () => {
     expect(pageSource).toContain("استعادة كلمة المرور");
     expect(confirmRoute).toContain("email_confirm");
     expect(resetRoute).toContain("password_reset");
+  });
+
+  it("saves permitted profile fields through an authenticated server route", () => {
+    const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
+    const profileRoute = readFileSync(join(process.cwd(), "app", "api", "auth", "profile", "route.ts"), "utf8");
+
+    expect(pageSource).toContain("/api/auth/profile");
+    expect(pageSource).toContain('name="falLicense"');
+    expect(profileRoute).toContain("requireAuthenticatedRequest()");
+    expect(profileRoute).toContain("set name = $2, fal_license = $3, timezone = $4");
+    expect(profileRoute).not.toContain("phone =");
+    expect(profileRoute).not.toContain("email =");
   });
 });

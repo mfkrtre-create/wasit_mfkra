@@ -35,7 +35,7 @@ function getFeatureProperties(feature: MapGeoJSONFeature) {
   return feature.properties as MapFeatureProperties;
 }
 
-function buildPopupElement(properties: MapFeatureProperties) {
+function buildPopupElement(properties: MapFeatureProperties, onOpenDetails: (id: string) => void) {
   const container = document.createElement("div");
   container.className = "map-popup";
 
@@ -66,6 +66,10 @@ function buildPopupElement(properties: MapFeatureProperties) {
   internalLink.href = properties.detailsUrl;
   internalLink.textContent = "فتح التفاصيل";
   internalLink.className = "map-popup__button";
+  internalLink.addEventListener("click", (event) => {
+    event.preventDefault();
+    onOpenDetails(properties.id);
+  });
   actions.appendChild(internalLink);
 
   const navigationLink = document.createElement("a");
@@ -370,7 +374,7 @@ export function RealEstateMap({
         popupRef.current?.remove();
         popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: "320px" })
           .setLngLat(feature.geometry.coordinates as [number, number])
-          .setDOMContent(buildPopupElement(properties))
+          .setDOMContent(buildPopupElement(properties, latestOnSelectRef.current))
           .addTo(map);
       };
 

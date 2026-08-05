@@ -18,3 +18,4 @@ deploy-nginx-smart-realestate.conf
 .deploy-release.txt
 arabic-test-tts.mp3
 map-qa-screenshot*.png
+reference/
