@@ -27,7 +27,7 @@ describe("map page source", () => {
 
   it("keeps AI and utility tools out of the primary sidebar navigation", () => {
     const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
-    const navBlock = pageSource.slice(pageSource.indexOf("const navItems"), pageSource.indexOf("const viewTitles"));
+    const navBlock = pageSource.slice(pageSource.indexOf("const navItems"), pageSource.indexOf("const profileSections"));
 
     expect(navBlock).not.toContain('id: "ai"');
     expect(navBlock).not.toContain('id: "calculator"');
@@ -35,6 +35,8 @@ describe("map page source", () => {
     expect(navBlock).not.toContain('id: "notifications"');
     expect(navBlock).not.toContain('id: "sharing"');
     expect(navBlock).not.toContain('id: "trash"');
+    expect(navBlock).toContain('label: "الرئيسية"');
+    expect(navBlock).toContain('label: "حسابي"');
     expect(pageSource).toContain('type ProfileSection = "settings" | "reminders" | "notifications" | "sharing" | "trash"');
     expect(pageSource).not.toContain('label: "الدخول والتسجيل"');
     expect(pageSource).toContain("تسجيل صوتي مباشر");
@@ -121,9 +123,11 @@ describe("map page source", () => {
   it("implements the approved broker workspace layout and advanced quick entry", () => {
     const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
 
-    expect(pageSource).toContain("إعلانات تجاوزت موعد التحديث");
+    expect(pageSource).toContain("إعلانات تجاوزت موعد تحديثها");
     expect(pageSource).toContain("مراسلة لتحديث العقار");
     expect(pageSource).toContain("سجل النشاط");
+    expect(pageSource).toContain("أحدث الإعلانات");
+    expect(pageSource).toContain("عمولة الشهر");
     expect(pageSource).toContain("إدخال يدوي");
     expect(pageSource).toContain("لصق واتساب");
     expect(pageSource).toContain("إدخال صوتي");
@@ -144,7 +148,9 @@ describe("map page source", () => {
 
     expect(pageSource).toContain('aria-label="التنقل الرئيسي للجوال"');
     expect(pageSource).toContain("pb-safe");
-    expect(pageSource).toContain('aria-label="الإشعارات"');
+    expect(pageSource).toContain("border-t border-slate-700/40 p-4");
+    expect(pageSource).toContain("إضافة سريعة");
+    expect(pageSource).not.toContain('aria-label="الإشعارات"');
     expect(pageSource).toContain("renderRecordDetailsModal");
     expect(pageSource).toContain("setShareModalOpen(true)");
     expect(pageSource).toContain("مشاركة من نفس الصفحة");

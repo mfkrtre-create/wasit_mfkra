@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Activity as ActivityIcon,
   Bell,
   Building2,
   Calculator,
@@ -12,8 +13,9 @@ import {
   ClipboardCopy,
   Eye,
   History,
+  Home as HomeIcon,
+  Inbox,
   Image as ImageIcon,
-  LayoutDashboard,
   MapPinned,
   MessageCircle,
   Mic2,
@@ -24,9 +26,11 @@ import {
   Share2,
   ShieldCheck,
   Sparkles,
+  Tag,
   Trash2,
   UploadCloud,
   UserPlus,
+  UserCircle,
   Users,
   WandSparkles,
   X,
@@ -203,23 +207,13 @@ type PublicShareOptions = {
 const riyadhTimezone = "Asia/Riyadh";
 
 const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
-  { id: "dashboard", label: "لوحة التحكم", icon: LayoutDashboard },
-  { id: "offers", label: "العروض", icon: Building2 },
-  { id: "requests", label: "الطلبات", icon: Search },
+  { id: "dashboard", label: "الرئيسية", icon: HomeIcon },
+  { id: "offers", label: "العروض", icon: Tag },
+  { id: "requests", label: "الطلبات", icon: Inbox },
   { id: "map", label: "الخريطة", icon: MapPinned },
   { id: "clients", label: "العملاء", icon: Users },
-  { id: "admin", label: "الملف الشخصي", icon: ShieldCheck },
+  { id: "admin", label: "حسابي", icon: UserCircle },
 ];
-
-const viewTitles: Record<ViewId, string> = {
-  dashboard: "لوحة التحكم",
-  offers: "العروض",
-  requests: "الطلبات",
-  ai: "إدخال AI",
-  map: "الخريطة",
-  clients: "العملاء",
-  admin: "الملف الشخصي",
-};
 
 const profileSections: Array<{ id: ProfileSection; label: string; icon: LucideIcon }> = [
   { id: "settings", label: "الحساب", icon: ShieldCheck },
@@ -332,6 +326,42 @@ function formatDateTime(value: string, timezone: string) {
     timeStyle: "short",
     timeZone: timezone,
   }).format(new Date(value));
+}
+
+function timeAgo(value: string) {
+  const diff = Date.now() - new Date(value).getTime();
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  if (!Number.isFinite(diff) || diff < minute) {
+    return "الآن";
+  }
+  if (diff < hour) {
+    return `قبل ${Math.floor(diff / minute)} دقيقة`;
+  }
+  if (diff < day) {
+    return `قبل ${Math.floor(diff / hour)} ساعة`;
+  }
+  return `قبل ${Math.floor(diff / day)} يوم`;
+}
+
+function greetingLabel() {
+  const hour = new Date().getHours();
+  if (hour < 12) {
+    return "صباح الخير";
+  }
+  if (hour < 17) {
+    return "مساء الخير";
+  }
+  return "مساء النور";
+}
+
+function brokerTierLabel(profile: BrokerProfile, user: AuthUser | null) {
+  if (profile.role === "admin" || user?.role === "admin") {
+    return "ذهبي";
+  }
+  return "وسيط نشط";
 }
 
 function normalizePhone(phone: string) {
@@ -1884,11 +1914,29 @@ export default function Home() {
   }
 
   function renderDashboard() {
-    const totalValue = offers.reduce((sum, record) => sum + (record.price ?? 0), 0);
     const overdueRecords = activeRecords.filter((record) => {
       const age = clockNow - new Date(record.updatedAt).getTime();
       return age >= record.reminderDays * 24 * 60 * 60 * 1000;
     });
+    const openOffers = offers.filter((record) => record.status === "for_sale" || record.status === "for_rent");
+    const openRequests = requests.filter((record) => record.status === "purchase" || record.status === "rental");
+    const monthCommission = 0;
+    const totalCommission = 0;
+    const tier = brokerTierLabel(workspace.profile, authUser);
+    const falLicense = authUser?.falLicense || workspace.records.find((record) => record.falLicense)?.falLicense || "غير مضاف";
+    const kpis = [
+      { label: "عروض نشطة", value: openOffers.length, tone: "teal" as const, icon: Tag, view: "offers" as ViewId },
+      { label: "طلبات نشطة", value: openRequests.length, tone: "blue" as const, icon: Inbox, view: "requests" as ViewId },
+      { label: "تحتاج تحديث", value: overdueRecords.length, tone: "red" as const, icon: CalendarClock, view: "dashboard" as ViewId },
+      { label: "عمولة الشهر", value: formatMoney(monthCommission), tone: "gold" as const, icon: CircleDollarSign, view: "admin" as ViewId },
+    ];
+    const activityIcon: Record<ActivityEvent["type"], string> = {
+      record_created: "+",
+      record_updated: "✓",
+      share_sent: "↗",
+      reminder_created: "!",
+      client_created: "👤",
+    };
 
     function markRecordFresh(record: PropertyRecord) {
       const refreshedAt = nowIso();
@@ -1930,68 +1978,169 @@ export default function Home() {
     }
 
     return (
-      <section className="grid gap-4">
-        <div className="grid gap-3 md:grid-cols-4">
-          {renderMetric("العروض المتاحة", offers.filter((record) => record.status === "for_sale" || record.status === "for_rent").length, "teal", Building2)}
-          {renderMetric("الطلبات المفتوحة", requests.filter((record) => record.status === "purchase" || record.status === "rental").length, "blue", Search)}
-          {renderMetric("تذكيرات مستحقة", dueReminders, "amber", CalendarClock)}
-          {renderMetric("قيمة العروض", formatMoney(totalValue), "slate", CircleDollarSign)}
+      <div className="mx-auto max-w-6xl space-y-6 px-4 py-5 md:py-8">
+        <header className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-[#c9972f]">{greetingLabel()}</p>
+            <h1 className="mt-0.5 text-2xl font-extrabold text-white md:text-3xl">{workspace.profile.name}</h1>
+            <p className="mt-1 text-sm text-slate-400">
+              {tier} • رخصة فال {falLicense}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setQuickKind("offer");
+              setQuickEntryMode("manual");
+              setQuickAddOpen(true);
+            }}
+            className="hidden items-center gap-2 rounded-xl px-5 py-3 font-extrabold text-[#0f1f3d] shadow-lg transition-all hover:brightness-110 active:scale-[0.98] sm:flex gold-gradient"
+          >
+            <Plus className="size-5" strokeWidth={3} aria-hidden="true" />
+            إضافة سريعة
+          </button>
+        </header>
+
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {kpis.map(({ label, value, icon: Icon, tone, view: targetView }) => {
+            const toneClass =
+              tone === "teal"
+                ? "border-emerald-500/25 text-emerald-300 bg-emerald-500/10"
+                : tone === "blue"
+                  ? "border-violet-500/25 text-violet-300 bg-violet-500/10"
+                  : tone === "red"
+                    ? "border-red-500/25 text-red-300 bg-red-500/10"
+                    : "border-[#c9972f]/25 text-[#e5bc55] bg-[#c9972f]/10";
+            return (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setView(targetView)}
+                className="rounded-2xl border border-slate-700/50 bg-[#0f1f3d] p-4 text-start transition hover:-translate-y-0.5 hover:border-[#c9972f]/40 card-glow"
+              >
+                <div className={`mb-3 flex size-10 items-center justify-center rounded-xl border ${toneClass}`}>
+                  <Icon className="size-5" aria-hidden="true" />
+                </div>
+                <p className="text-xl font-extrabold text-white nums-latin md:text-2xl">{value}</p>
+                <p className="mt-0.5 text-xs font-semibold text-slate-400">{label}</p>
+              </button>
+            );
+          })}
         </div>
-        <Panel title="إعلانات تجاوزت موعد التحديث">
-          <div className="grid gap-3">
-            {overdueRecords.length > 0 ? (
-              overdueRecords.slice(0, 6).map((record) => (
-                <div key={record.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300/25 bg-amber-300/8 p-4">
-                  <div>
-                    <p className="font-black text-white">{record.title}</p>
-                    <p className="mt-1 text-sm text-slate-400">آخر تحديث: {formatDateTime(record.updatedAt, workspace.profile.timezone)}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button type="button" disabled={!record.ownerPhone && !record.contact} onClick={() => openUpdateMessage(record)} className="primary-button disabled:cursor-not-allowed disabled:opacity-40">
-                      <MessageCircle className="size-4" aria-hidden="true" />
+
+        {overdueRecords.length > 0 ? (
+          <section className="rounded-2xl border border-red-500/30 bg-red-500/5 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="flex items-center gap-2 font-extrabold text-red-300">
+                <CalendarClock className="size-5" aria-hidden="true" />
+                إعلانات تجاوزت موعد تحديثها ({overdueRecords.length})
+              </h2>
+            </div>
+            <div className="space-y-2">
+              {overdueRecords.slice(0, 6).map((record) => (
+                <div key={record.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-red-500/20 bg-[#0f1f3d] px-3.5 py-2.5">
+                  <span className="min-w-40 flex-1 truncate text-sm font-bold text-white">{record.title}</span>
+                  <span className="text-[11px] text-slate-400">{record.ownerName || record.contact || "غير محدد"}</span>
+                  <div className="ms-auto flex gap-1.5">
+                    <button
+                      type="button"
+                      disabled={!record.ownerPhone && !record.contact}
+                      onClick={() => openUpdateMessage(record)}
+                      className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-bold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
                       مراسلة لتحديث العقار
                     </button>
-                    <button type="button" onClick={() => markRecordFresh(record)} className="secondary-button">
-                      <CheckCircle2 className="size-4" aria-hidden="true" />
+                    <button
+                      type="button"
+                      onClick={() => markRecordFresh(record)}
+                      className="rounded-lg border border-slate-700/60 bg-[#172641]/70 px-2.5 py-1.5 text-[11px] font-bold text-slate-200 transition hover:border-emerald-500/40"
+                    >
                       تم التحديث
                     </button>
                   </div>
                 </div>
-              ))
-            ) : (
-              <EmptyState label="لا توجد إعلانات متأخرة عن موعد التحديث." />
-            )}
-          </div>
-        </Panel>
-        <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
-          <div className="rounded-2xl border border-slate-700/50 bg-[#0f1f3d] p-4 card-glow">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-black text-slate-50">أحدث السجلات</h2>
-              <button type="button" onClick={() => setQuickAddOpen(true)} className="primary-button">
-                <Plus className="size-4" aria-hidden="true" />
-                إضافة سريع
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {[
+            { label: "إضافة عرض", icon: "🏷️", action: () => { setQuickKind("offer"); setQuickEntryMode("manual"); setQuickAddOpen(true); } },
+            { label: "إضافة طلب", icon: "📥", action: () => { setQuickKind("request"); setQuickEntryMode("manual"); setQuickAddOpen(true); } },
+            { label: "الخريطة", icon: "🗺️", action: () => setView("map") },
+            { label: "الإحصائيات", icon: "📊", action: () => { setProfileSection("sharing"); setView("admin"); } },
+          ].map((action) => (
+            <button
+              key={action.label}
+              type="button"
+              onClick={action.action}
+              className="rounded-2xl border border-slate-700/50 bg-[#0f1f3d] p-4 text-center transition hover:-translate-y-0.5 hover:border-[#c9972f]/40 card-glow"
+            >
+              <span className="text-2xl">{action.icon}</span>
+              <p className="mt-1.5 text-sm font-bold text-slate-200">{action.label}</p>
+            </button>
+          ))}
+        </section>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <section>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="flex items-center gap-2 font-extrabold text-white">
+                <ActivityIcon className="size-5 text-[#c9972f]" aria-hidden="true" />
+                أحدث الإعلانات
+              </h2>
+              <button type="button" onClick={() => setView("offers")} className="flex items-center gap-1 text-xs font-bold text-[#e5bc55] hover:underline">
+                عرض الكل
               </button>
             </div>
-            <div className="grid gap-3">{activeRecords.length > 0 ? activeRecords.slice(0, 4).map(renderRecordCard) : <EmptyState label="ابدأ بإضافة أول عرض أو طلب." />}</div>
-          </div>
-          <Panel title="سجل النشاط">
-            <div className="relative grid gap-4 before:absolute before:bottom-2 before:right-[0.45rem] before:top-2 before:w-px before:bg-slate-600/40">
+            <div className="space-y-3">
+              {activeRecords.length > 0 ? (
+                activeRecords.slice(0, 3).map(renderRecordCard)
+              ) : (
+                <p className="py-8 text-center text-sm text-slate-400">لا توجد إعلانات بعد - أضف أول إعلان</p>
+              )}
+            </div>
+          </section>
+
+          <section>
+            <h2 className="mb-3 flex items-center gap-2 font-extrabold text-white">
+              <History className="size-5 text-[#c9972f]" aria-hidden="true" />
+              سجل النشاط
+            </h2>
+            <div className="max-h-[520px] overflow-y-auto rounded-2xl border border-slate-700/50 bg-[#0f1f3d] divide-y divide-slate-700/50 scrollbar-thin card-glow">
               {workspace.activities.length > 0 ? (
-                workspace.activities.slice(0, 10).map((activity) => (
-                  <div key={activity.id} className="relative pr-7">
-                    <span className="absolute right-0 top-1.5 size-4 rounded-full border-4 border-[#0f1c34] bg-amber-300" />
-                    <p className="font-black text-slate-100">{activity.title}</p>
-                    <p className="mt-1 text-sm text-slate-400">{activity.details}</p>
-                    <p className="mt-1 text-xs text-slate-500">{formatDateTime(activity.createdAt, workspace.profile.timezone)}</p>
+                workspace.activities.slice(0, 20).map((activity) => (
+                  <div key={activity.id} className="flex items-start gap-3 px-4 py-3">
+                    <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-lg border border-[#c9972f]/25 bg-[#c9972f]/10 text-xs font-bold text-[#e5bc55]">
+                      {activityIcon[activity.type] ?? "•"}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold leading-snug text-slate-100">{activity.title}</p>
+                      {activity.details ? <p className="mt-0.5 truncate text-[11px] text-[#e5bc55]/80">{activity.details}</p> : null}
+                      <p className="mt-0.5 text-[10px] text-slate-500">{timeAgo(activity.createdAt)}</p>
+                    </div>
                   </div>
                 ))
               ) : (
-                <EmptyState label="سيظهر هنا تاريخ الإضافات والتحديثات والمشاركات." />
+                <p className="py-8 text-center text-sm text-slate-400">لا يوجد نشاط بعد</p>
               )}
             </div>
-          </Panel>
+          </section>
         </div>
-      </section>
+
+        {totalCommission > 0 ? (
+          <section className="flex items-center justify-between rounded-2xl border border-[#c9972f]/30 p-4 navy-gradient">
+            <div>
+              <p className="text-xs font-semibold text-slate-400">إجمالي العمولات المحققة</p>
+              <p className="mt-0.5 text-2xl font-extrabold text-[#e5bc55] nums-latin">{formatMoney(totalCommission)}</p>
+            </div>
+            <button type="button" onClick={() => setView("admin")} className="text-xs font-bold text-[#e5bc55] hover:underline">
+              التفاصيل المالية
+            </button>
+          </section>
+        ) : null}
+      </div>
     );
   }
 
@@ -3307,8 +3456,6 @@ export default function Home() {
     }
   }
 
-  const activeTitle = viewTitles[view];
-
   if (!authReady) {
     return (
       <main className="grid min-h-screen place-items-center bg-[#071224] p-4 text-white">
@@ -3341,17 +3488,15 @@ export default function Home() {
                 <p className="text-xs font-semibold text-[#c9972f]">العقاري</p>
               </div>
             </div>
-            <div className="mt-4 rounded-xl border border-slate-700/55 bg-[#172641]/60 p-3">
+          </div>
+          <div className="px-4 py-3">
+            <div className="rounded-xl border border-slate-700/55 bg-[#172641]/60 p-3">
               <p className="text-sm font-bold text-white">{workspace.profile.name}</p>
-              <p className="mt-0.5 text-xs text-slate-400">{authUser?.phone || authUser?.email}</p>
+              <p className="mt-0.5 text-xs text-slate-400">فال: {authUser?.falLicense || workspace.records.find((record) => record.falLicense)?.falLicense || "غير مضاف"}</p>
               <span className="mt-2 inline-flex rounded-full border border-[#c9972f]/30 bg-[#c9972f]/15 px-2 py-0.5 text-[11px] font-bold text-[#e5bc55]">
-                وسيط نشط
+                {brokerTierLabel(workspace.profile, authUser)}
               </span>
             </div>
-            <button type="button" onClick={() => { setQuickKind("offer"); setQuickEntryMode("manual"); setQuickAddOpen(true); }} className="primary-button mt-4 w-full justify-center">
-              <Plus className="size-5" aria-hidden="true" />
-              إضافة عرض
-            </button>
           </div>
           <nav className="flex-1 space-y-1 overflow-y-auto p-3 scrollbar-thin">
             {navItems.map((item) => {
@@ -3372,32 +3517,24 @@ export default function Home() {
               );
             })}
           </nav>
+          <div className="border-t border-slate-700/40 p-4">
+            <button
+              type="button"
+              onClick={() => {
+                setQuickKind("offer");
+                setQuickEntryMode("manual");
+                setQuickAddOpen(true);
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 font-extrabold text-[#0f1f3d] shadow-lg transition-all hover:brightness-110 active:scale-[0.98] gold-gradient"
+            >
+              <Plus className="size-5" strokeWidth={3} aria-hidden="true" />
+              إضافة سريعة
+            </button>
+          </div>
         </aside>
 
-        <div className="min-w-0 md:mr-64">
-          <header className="sticky top-0 z-20 border-b border-slate-700/40 bg-[#071224]/90 px-4 py-4 backdrop-blur lg:px-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold text-[#c9972f]">مفكرة الوسيط</p>
-                <h2 className="mt-1 text-2xl font-extrabold text-white md:text-3xl">{activeTitle}</h2>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button type="button" onClick={() => { setQuickEntryMode("whatsapp"); setQuickAddOpen(true); }} className="primary-button">
-                  <Sparkles className="size-4" aria-hidden="true" />
-                  إدخال AI
-                </button>
-                <button type="button" onClick={() => { setProfileSection("notifications"); setView("admin"); }} className="secondary-button" aria-label="الإشعارات">
-                  <Bell className="size-4" aria-hidden="true" />
-                  الإشعارات
-                  {unreadNotifications > 0 ? <span className="rounded-full bg-amber-400 px-2 py-0.5 text-xs text-slate-950">{unreadNotifications}</span> : null}
-                </button>
-                <button type="button" onClick={signOut} className="secondary-button">
-                  خروج
-                </button>
-              </div>
-            </div>
-          </header>
-          <div className={view === "map" ? "pb-24 md:pb-0" : "mx-auto max-w-6xl p-4 pb-28 md:p-6"}>{renderContent()}</div>
+        <div className="min-h-screen min-w-0 md:mr-64">
+          <div className={view === "map" ? "pb-24 md:pb-0" : view === "dashboard" ? "pb-28 md:pb-8" : "mx-auto max-w-6xl p-4 pb-28 md:p-6 md:pb-8"}>{renderContent()}</div>
         </div>
       </div>
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-700/40 bg-[#0c1a36]/95 pb-safe shadow-2xl backdrop-blur md:hidden" aria-label="التنقل الرئيسي للجوال">
@@ -3426,7 +3563,7 @@ export default function Home() {
       <button
         type="button"
         onClick={() => { setQuickEntryMode("manual"); setQuickAddOpen(true); }}
-        className="fixed bottom-20 left-4 z-40 grid size-14 place-items-center rounded-full gold-gradient shadow-xl shadow-[#c9972f]/25 transition hover:-translate-y-1 md:bottom-5"
+        className="fixed bottom-20 left-4 z-40 grid size-14 place-items-center rounded-full gold-gradient shadow-xl shadow-[#c9972f]/25 transition hover:-translate-y-1 md:hidden"
         aria-label="إضافة سريع"
       >
         <Plus className="size-7 text-[#0f1f3d]" strokeWidth={3} aria-hidden="true" />
