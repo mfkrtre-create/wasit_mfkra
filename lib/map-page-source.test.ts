@@ -143,7 +143,7 @@ describe("map page source", () => {
     const mapSource = readFileSync(join(process.cwd(), "components", "RealEstateMap.tsx"), "utf8");
 
     expect(pageSource).toContain('aria-label="التنقل الرئيسي للجوال"');
-    expect(pageSource).toContain("pb-[calc(0.5rem+env(safe-area-inset-bottom))]");
+    expect(pageSource).toContain("pb-safe");
     expect(pageSource).toContain('aria-label="الإشعارات"');
     expect(pageSource).toContain("renderRecordDetailsModal");
     expect(pageSource).toContain("setShareModalOpen(true)");

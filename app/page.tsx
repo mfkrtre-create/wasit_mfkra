@@ -11,7 +11,6 @@ import {
   CircleDollarSign,
   ClipboardCopy,
   Eye,
-  Filter,
   History,
   Image as ImageIcon,
   LayoutDashboard,
@@ -514,16 +513,16 @@ function mapAiToRecord(data: PropertyData, source: "ai-text" | "ai-voice", clien
 function metricClass(tone: "teal" | "blue" | "amber" | "slate") {
   const tones = {
     teal: "border-emerald-400/30 bg-emerald-400/10 text-emerald-50",
-    blue: "border-sky-400/30 bg-sky-400/10 text-sky-50",
-    amber: "border-amber-300/40 bg-amber-300/12 text-amber-50",
-    slate: "border-slate-400/20 bg-slate-400/10 text-slate-50",
+    blue: "border-violet-400/30 bg-violet-500/10 text-violet-50",
+    amber: "border-[#c9972f]/35 bg-[#c9972f]/10 text-[#e5bc55]",
+    slate: "border-slate-500/25 bg-[#0f1f3d] text-slate-50",
   };
 
-  return `rounded-2xl border p-4 shadow-sm backdrop-blur ${tones[tone]}`;
+  return `rounded-2xl border p-4 card-glow transition hover:-translate-y-0.5 ${tones[tone]}`;
 }
 
 function fieldClass() {
-  return "h-11 w-full rounded-xl border border-slate-600/40 bg-slate-950/30 px-3 text-sm text-slate-50 outline-none transition placeholder:text-slate-400 focus:border-amber-300/60 focus:ring-2 focus:ring-amber-300/20";
+  return "h-11 w-full rounded-xl border border-slate-600/40 bg-[#0a1730]/70 px-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-[#c9972f]/70 focus:ring-2 focus:ring-[#c9972f]/15";
 }
 
 function hasUsableCoordinates(latitude: number, longitude: number) {
@@ -1586,11 +1585,11 @@ export default function Home() {
     const Icon = icon;
     return (
       <div className={metricClass(tone)}>
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-sm font-bold">{label}</span>
+        <div className="mb-3 flex size-10 items-center justify-center rounded-xl border border-current/25 bg-current/10">
           <Icon className="size-5" aria-hidden="true" />
         </div>
-        <p className="mt-3 text-3xl font-black">{value}</p>
+        <p className="text-2xl font-extrabold text-white nums-latin">{value}</p>
+        <p className="mt-0.5 text-xs font-semibold text-slate-400">{label}</p>
       </div>
     );
   }
@@ -1609,18 +1608,18 @@ export default function Home() {
     const costs = calculateOfferCosts(recordBasePrice(record));
 
     return (
-      <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4">
-        <div className="mb-3 flex items-center gap-2 text-blue-950">
+      <div className="mt-4 rounded-2xl border border-[#c9972f]/30 navy-gradient p-4 card-glow">
+        <div className="mb-3 flex items-center gap-2 text-[#e5bc55]">
           <Calculator className="size-4" aria-hidden="true" />
           <p className="font-black">التفاصيل المالية للعرض</p>
         </div>
-        <div className="grid gap-2 text-sm font-bold text-slate-800 sm:grid-cols-2">
+        <div className="grid gap-2 text-sm font-bold text-slate-200 sm:grid-cols-2">
           <span>السعر الأساسي ({record.basePriceMode === "asking" ? "السوم" : "الحد"}): {formatMoney(costs.basePrice)}</span>
           <span>ضريبة التصرفات 5%: {formatMoney(costs.rett)}</span>
           <span>عمولة الوساطة 2.5%: {formatMoney(costs.commission)}</span>
           <span>VAT على العمولة 15%: {formatMoney(costs.vatOnCommission)}</span>
         </div>
-        <p className="mt-3 rounded-md bg-white p-3 text-lg font-black text-blue-900">الإجمالي التقديري: {formatMoney(costs.total)}</p>
+        <p className="mt-3 rounded-xl border border-[#c9972f]/20 bg-[#0a1730]/70 p-3 text-lg font-black text-[#e5bc55]">الإجمالي التقديري: {formatMoney(costs.total)}</p>
       </div>
     );
   }
@@ -1642,41 +1641,41 @@ export default function Home() {
         key={record.id}
         id={`record-${record.id}`}
         onClick={() => setSelectedRecordId(record.id)}
-        className={`relative cursor-pointer overflow-hidden rounded-2xl border bg-[#0f1c34]/92 p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-amber-300/55 ${cardTone}`}
+        className={`relative cursor-pointer overflow-hidden rounded-2xl border bg-[#0f1f3d] p-4 card-glow transition hover:-translate-y-0.5 hover:border-[#c9972f]/45 ${cardTone}`}
       >
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-l from-amber-300 via-emerald-400 to-sky-400 opacity-70" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-1 gold-gradient opacity-80" />
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 flex-1 gap-3">
             {mainImage ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={mainImage.url} alt={record.title} className="h-20 w-24 shrink-0 rounded-lg border border-slate-600/30 object-cover" />
+              <img src={mainImage.url} alt={record.title} className="h-20 w-24 shrink-0 rounded-xl border border-slate-600/40 object-cover" />
             ) : null}
             <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-slate-500/25 bg-slate-900/40 px-3 py-1 text-xs font-bold text-slate-200">
+              <span className="rounded-full border border-slate-500/30 bg-[#172641]/80 px-3 py-1 text-xs font-bold text-slate-200">
                 {recordKindLabels[record.kind]}
               </span>
-              <span className="rounded-full border border-emerald-300/25 bg-emerald-400/10 px-3 py-1 text-xs font-bold text-emerald-100">
+              <span className="rounded-full border border-[#c9972f]/35 bg-[#c9972f]/15 px-3 py-1 text-xs font-bold text-[#e5bc55]">
                 {statusLabels[record.status]}
               </span>
             </div>
-            <h3 className="mt-3 text-lg font-black text-slate-50">{record.title}</h3>
+            <h3 className="mt-3 line-clamp-1 text-lg font-extrabold text-white">{record.title}</h3>
             <p className="mt-1 text-sm text-slate-400">
               {record.city}، {record.district} | {record.propertyType} | {record.transaction}
             </p>
             </div>
           </div>
-          <p className="rounded-2xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-lg font-black text-amber-100">{formatMoney(recordAmount(record))}</p>
+          <p className="rounded-xl border border-[#c9972f]/30 bg-[#c9972f]/10 px-4 py-3 text-lg font-extrabold text-[#e5bc55] nums-latin">{formatMoney(recordAmount(record))}</p>
         </div>
         <div className="mt-4 grid gap-2 text-sm text-slate-300 sm:grid-cols-2 xl:grid-cols-4">
-          <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">المساحة: {formatArea(record.area)}</span>
-          <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">السوم: {formatMoney(record.askingPrice)}</span>
-          <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">سعر المتر: {pricePerMeter ? formatMoney(pricePerMeter) : "غير محدد"}</span>
-          <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">الواجهة: {record.facades.join("، ") || record.facade || "غير محدد"}</span>
-          <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">الشارع: {record.streetWidth ? `${record.streetWidth} م` : "غير محدد"}</span>
-          <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">المخطط: {record.planNumber || "غير محدد"}</span>
-          <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">العمر: {record.propertyAge || "غير محدد"}</span>
-          <span className="rounded-xl border border-slate-500/20 bg-slate-950/20 p-2">العميل: {client?.name ?? "غير مرتبط"}</span>
+          <span className="rounded-xl border border-slate-600/35 bg-[#172641]/45 p-2">المساحة: {formatArea(record.area)}</span>
+          <span className="rounded-xl border border-slate-600/35 bg-[#172641]/45 p-2">السوم: {formatMoney(record.askingPrice)}</span>
+          <span className="rounded-xl border border-slate-600/35 bg-[#172641]/45 p-2">سعر المتر: {pricePerMeter ? formatMoney(pricePerMeter) : "غير محدد"}</span>
+          <span className="rounded-xl border border-slate-600/35 bg-[#172641]/45 p-2">الواجهة: {record.facades.join("، ") || record.facade || "غير محدد"}</span>
+          <span className="rounded-xl border border-slate-600/35 bg-[#172641]/45 p-2">الشارع: {record.streetWidth ? `${record.streetWidth} م` : "غير محدد"}</span>
+          <span className="rounded-xl border border-slate-600/35 bg-[#172641]/45 p-2">المخطط: {record.planNumber || "غير محدد"}</span>
+          <span className="rounded-xl border border-slate-600/35 bg-[#172641]/45 p-2">العمر: {record.propertyAge || "غير محدد"}</span>
+          <span className="rounded-xl border border-slate-600/35 bg-[#172641]/45 p-2">العميل: {client?.name ?? "غير مرتبط"}</span>
         </div>
         <p className="mt-3 line-clamp-2 text-sm leading-7 text-slate-300">{record.notes || "لا توجد ملاحظات."}</p>
         <div className="mt-4 flex flex-wrap gap-2">
@@ -1746,7 +1745,7 @@ export default function Home() {
         </div>
         {editingRecordId === record.id ? (
           <form
-            className="mt-4 grid gap-3 rounded-2xl border border-slate-500/20 bg-slate-950/20 p-3 md:grid-cols-3"
+            className="mt-4 grid gap-3 rounded-2xl border border-slate-600/35 bg-[#172641]/35 p-3 md:grid-cols-3"
             onClick={(event) => event.stopPropagation()}
             onSubmit={(event) => {
               event.preventDefault();
@@ -1806,27 +1805,33 @@ export default function Home() {
         : "all";
 
     return (
-      <section className="grid gap-4">
-        <div className="rounded-2xl border border-slate-600/25 bg-[#0f1c34]/92 p-4 shadow-sm">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-slate-50">
-            <div className="flex items-center gap-2">
-            <Filter className="size-5" aria-hidden="true" />
-            <h2 className="text-lg font-black">بحث وفلاتر {kind === "offer" ? "العروض" : "الطلبات"}</h2>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setQuickKind(kind);
-                setQuickEntryMode("manual");
-                setQuickAddOpen(true);
-              }}
-              className="primary-button"
-            >
-              <Plus className="size-4" aria-hidden="true" />
-              إضافة {recordKindLabels[kind]}
-            </button>
+      <section className="grid gap-5">
+        <header className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="flex items-center gap-2.5 text-2xl font-extrabold text-white md:text-3xl">
+              <span className="flex size-10 items-center justify-center rounded-xl gold-gradient">
+                {kind === "offer" ? <Building2 className="size-5 text-[#0f1f3d]" strokeWidth={2.5} aria-hidden="true" /> : <Search className="size-5 text-[#0f1f3d]" strokeWidth={2.5} aria-hidden="true" />}
+              </span>
+              {kind === "offer" ? "العروض" : "الطلبات"}
+            </h1>
+            <p className="mt-1.5 text-sm text-slate-400">{kind === "offer" ? "عقارات تعرضها لعملائك للبيع أو للإيجار" : "طلبات عملائك للشراء أو الاستئجار"}</p>
           </div>
-          <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+          <button
+            type="button"
+            onClick={() => {
+              setQuickKind(kind);
+              setQuickEntryMode("manual");
+              setQuickAddOpen(true);
+            }}
+            className="primary-button"
+          >
+            <Plus className="size-4" aria-hidden="true" />
+            إضافة {recordKindLabels[kind]}
+          </button>
+        </header>
+
+        <div className="grid gap-4">
+          <div className="flex gap-1.5 overflow-x-auto px-1 pb-1 scrollbar-thin">
             <button
               type="button"
               onClick={() => setFilters((current) => ({ ...current, status: "all" }))}
@@ -1849,12 +1854,15 @@ export default function Home() {
             })}
           </div>
           <div className="grid gap-3 md:grid-cols-[1fr_14rem]">
-            <input
-              value={filters.query}
-              onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))}
-              placeholder="ابحث بالعنوان أو الحي أو المدينة أو اسم العميل..."
-              className={fieldClass()}
-            />
+            <div className="relative">
+              <Search className="pointer-events-none absolute start-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+              <input
+                value={filters.query}
+                onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))}
+                placeholder="ابحث بالعنوان، الحي، المدينة، أو اسم المالك/العميل..."
+                className={`${fieldClass()} ps-10`}
+              />
+            </div>
             <select
               value={filters.city}
               onChange={(event) => setFilters((current) => ({ ...current, city: event.target.value }))}
@@ -1870,7 +1878,7 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="grid gap-3">{records.length > 0 ? records.map(renderRecordCard) : <EmptyState label="لا توجد سجلات مطابقة." />}</div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{records.length > 0 ? records.map(renderRecordCard) : <EmptyState label="لا توجد سجلات مطابقة." />}</div>
       </section>
     );
   }
@@ -1956,7 +1964,7 @@ export default function Home() {
           </div>
         </Panel>
         <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
-          <div className="rounded-2xl border border-slate-600/25 bg-[#0f1c34]/92 p-4 shadow-sm">
+          <div className="rounded-2xl border border-slate-700/50 bg-[#0f1f3d] p-4 card-glow">
             <div className="mb-3 flex items-center justify-between gap-3">
               <h2 className="text-lg font-black text-slate-50">أحدث السجلات</h2>
               <button type="button" onClick={() => setQuickAddOpen(true)} className="primary-button">
@@ -1999,8 +2007,8 @@ export default function Home() {
 
     return (
       <div className="fixed inset-0 z-[80] overflow-y-auto bg-slate-950/80 p-3 backdrop-blur-sm lg:p-6" role="dialog" aria-modal="true" aria-label="إضافة سجل عقاري">
-        <div className="mx-auto max-w-5xl rounded-3xl border border-slate-600/35 bg-[#0a162a] shadow-2xl">
-          <div className="sticky top-0 z-10 flex items-center justify-between gap-3 rounded-t-3xl border-b border-slate-600/30 bg-[#0a162a]/95 p-4 backdrop-blur">
+        <div className="mx-auto flex max-h-[92vh] max-w-3xl flex-col overflow-hidden rounded-2xl border border-[#c9972f]/25 bg-[#0f1f3d] text-white shadow-2xl">
+          <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-700/50 bg-[#0f1f3d]/95 p-4 backdrop-blur">
             <div>
               <p className="text-xs font-bold text-amber-300">إضافة سريع</p>
               <h2 className="mt-1 text-2xl font-black text-white">سجل عقاري جديد</h2>
@@ -2011,7 +2019,7 @@ export default function Home() {
           </div>
 
           <div className="grid gap-4 p-4 lg:p-6">
-            <div className="grid grid-cols-3 gap-2 rounded-2xl border border-slate-600/25 bg-slate-950/25 p-1">
+            <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-slate-700/55 bg-[#172641]/50 p-1">
               {([
                 ["manual", "إدخال يدوي"],
                 ["whatsapp", "لصق واتساب"],
@@ -2033,12 +2041,12 @@ export default function Home() {
                   addRecord(quickKind, new FormData(event.currentTarget));
                 }}
               >
-                <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-600/25 bg-slate-950/25 p-1">
+                <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-700/55 bg-[#172641]/50 p-1">
                   <button type="button" onClick={() => setQuickKind("offer")} className={quickKind === "offer" ? "primary-button justify-center" : "secondary-button justify-center"}>عرض — أملك عقاراً</button>
                   <button type="button" onClick={() => setQuickKind("request")} className={quickKind === "request" ? "primary-button justify-center" : "secondary-button justify-center"}>طلب — مطلوب من عميل</button>
                 </div>
 
-                <section className="grid gap-3 rounded-2xl border border-slate-600/25 bg-[#0f1c34] p-4">
+                <section className="grid gap-3 rounded-2xl border border-slate-700/55 bg-[#172641]/35 p-4">
                   <h3 className="font-black text-amber-100">البيانات الأساسية</h3>
                   <div className="grid gap-3 md:grid-cols-3">
                     <select name="status" defaultValue={quickKind === "offer" ? "for_sale" : "purchase"} className={fieldClass()}>
@@ -2058,7 +2066,7 @@ export default function Home() {
                   </div>
                 </section>
 
-                <section className="grid gap-3 rounded-2xl border border-slate-600/25 bg-[#0f1c34] p-4">
+                <section className="grid gap-3 rounded-2xl border border-slate-700/55 bg-[#172641]/35 p-4">
                   <h3 className="font-black text-amber-100">السعر والمساحة</h3>
                   <div className="grid gap-3 md:grid-cols-3">
                     <Field label={quickKind === "offer" ? "سعر البيع / الحد (ريال)" : "الميزانية القصوى (ريال)"}>
@@ -2083,7 +2091,7 @@ export default function Home() {
                   </div>
                 </section>
 
-                <section className="grid gap-3 rounded-2xl border border-slate-600/25 bg-[#0f1c34] p-4">
+                <section className="grid gap-3 rounded-2xl border border-slate-700/55 bg-[#172641]/35 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <h3 className="font-black text-amber-100">صور العقار</h3>
@@ -2132,7 +2140,7 @@ export default function Home() {
                   )}
                 </section>
 
-                <section className="grid gap-3 rounded-2xl border border-slate-600/25 bg-[#0f1c34] p-4">
+                <section className="grid gap-3 rounded-2xl border border-slate-700/55 bg-[#172641]/35 p-4">
                   <h3 className="font-black text-amber-100">التفاصيل الفنية والتراخيص</h3>
                   <div>
                     <p className="mb-2 text-sm font-bold text-slate-300">الواجهات — يمكن اختيار أكثر من واجهة</p>
@@ -2156,7 +2164,7 @@ export default function Home() {
                   </div>
                 </section>
 
-                <section className="grid gap-3 rounded-2xl border border-slate-600/25 bg-[#0f1c34] p-4">
+                <section className="grid gap-3 rounded-2xl border border-slate-700/55 bg-[#172641]/35 p-4">
                   <h3 className="font-black text-amber-100">العميل والموقع والمتابعة</h3>
                   <div className="grid gap-3 md:grid-cols-3">
                     <select name="clientId" className={fieldClass()}><option value="">إنشاء/ربط العميل من البيانات أدناه</option>{workspace.clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select>
@@ -2196,7 +2204,7 @@ export default function Home() {
   function renderAiEntry() {
     return (
       <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-slate-700/50 bg-[#0f1f3d] p-4 card-glow">
           <div className="mb-4 flex items-center gap-2">
             <WandSparkles className="size-5 text-teal-700" aria-hidden="true" />
             <h2 className="text-lg font-black text-slate-950">إدخال ذكي من النص أو الصوت</h2>
@@ -2231,7 +2239,7 @@ export default function Home() {
           {aiProgress ? <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-900">{aiProgress}</p> : null}
           {aiError ? <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-800">{aiError}</p> : null}
         </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-slate-700/50 bg-[#0f1f3d] p-4 card-glow">
           <h2 className="mb-4 text-lg font-black text-slate-950">نتيجة المراجعة قبل الحفظ</h2>
           {aiResult ? (
             <div className="grid gap-3">
@@ -2337,61 +2345,95 @@ export default function Home() {
     const mapRecords = filterMapRecords(mapListRecords.map(toMapRecord), filters);
     const visibleRecordIds = new Set(mapRecords.map((record) => record.id));
     const visibleRecords = mapListRecords.filter((record) => visibleRecordIds.has(record.id));
+    const listContent = (
+      <div className="divide-y divide-slate-700/60">
+        {visibleRecords.length > 0 ? (
+          visibleRecords.map((record) => (
+            <button
+              id={`record-${record.id}`}
+              key={record.id}
+              type="button"
+              onClick={() => selectMapRecord(record.id)}
+              onMouseEnter={() => setHoveredMapId(record.id)}
+              onMouseLeave={() => setHoveredMapId(null)}
+              className={[
+                "flex w-full items-center gap-3 px-4 py-3 text-start transition hover:bg-[#172641]/60",
+                selectedShareId === record.id ? "bg-[#c9972f]/10" : "",
+              ].join(" ")}
+            >
+              <span className="size-3 shrink-0 rounded-full border border-white/40 bg-[#c9972f]" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-bold text-white">{record.title}</span>
+                <span className="mt-0.5 block text-[11px] text-slate-400">
+                  {record.city}، {record.district} • {recordKindLabels[record.kind]} • {statusLabels[record.status]}
+                </span>
+              </span>
+              <span className="shrink-0 text-xs font-extrabold text-[#e5bc55] nums-latin">{formatMoney(recordAmount(record))}</span>
+            </button>
+          ))
+        ) : (
+          <EmptyState label="لا توجد سجلات مطابقة بإحداثيات صالحة." />
+        )}
+      </div>
+    );
 
     return (
-      <section className="grid gap-4 xl:grid-cols-[0.82fr_1.18fr]">
-        <div className="xl:hidden">
-          <button type="button" onClick={() => setIsMobileMapOpen(true)} className="primary-button w-full justify-center">
-            <MapPinned className="size-4" aria-hidden="true" />
-            عرض الخريطة
-          </button>
-        </div>
-        <Panel title="سجلات الخريطة">
-          <div className="grid gap-3 xl:max-h-[calc(100vh-10rem)] xl:overflow-auto xl:pl-1">
-            {visibleRecords.length > 0 ? (
-              visibleRecords.map((record) => (
-              <button
-                id={`record-${record.id}`}
-                key={record.id}
-                type="button"
-                onClick={() => selectMapRecord(record.id)}
-                onMouseEnter={() => setHoveredMapId(record.id)}
-                onMouseLeave={() => setHoveredMapId(null)}
-                className={[
-                  "rounded-md border bg-white p-3 text-right transition hover:border-teal-300 hover:bg-teal-50",
-                  selectedShareId === record.id ? "border-teal-500 ring-2 ring-teal-500/20" : "border-slate-200",
-                ].join(" ")}
-              >
-                <p className="font-black text-slate-950">{record.title}</p>
-                <p className="mt-1 text-sm text-slate-600">
-                  {record.city}، {record.district} | {recordKindLabels[record.kind]} | {statusLabels[record.status]}
-                </p>
-                <p className="mt-2 text-sm font-bold text-slate-900">{formatMoney(recordAmount(record))}</p>
-              </button>
-              ))
-            ) : (
-              <EmptyState label="لا توجد سجلات مطابقة بإحداثيات صالحة." />
-            )}
+      <section className="relative h-[calc(100vh-5rem)] overflow-hidden md:grid md:h-[calc(100vh-4.5rem)] md:grid-cols-[26rem_1fr]">
+        <div className="hidden flex-col border-l border-slate-700/50 bg-[#0c1a36] md:flex">
+          <div className="space-y-3 border-b border-slate-700/50 p-4">
+            <h1 className="text-xl font-extrabold text-white">خريطة السجلات</h1>
+            <div className="grid gap-3 md:grid-cols-[1fr_10rem]">
+              <input
+                value={filters.query}
+                onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))}
+                placeholder="بحث في الخريطة..."
+                className={fieldClass()}
+              />
+              <select value={filters.city} onChange={(event) => setFilters((current) => ({ ...current, city: event.target.value }))} className={fieldClass()}>
+                <option value="all">كل المدن</option>
+                {cities.map((city) => <option key={city} value={city}>{city}</option>)}
+              </select>
+            </div>
           </div>
-        </Panel>
-        <div
-          className={[
-            "xl:sticky xl:top-24 xl:block xl:h-[calc(100vh-8rem)]",
-            isMobileMapOpen ? "fixed inset-0 z-50 bg-white p-3" : "hidden",
-          ].join(" ")}
-        >
-          {isMobileMapOpen ? (
-            <button type="button" onClick={() => setIsMobileMapOpen(false)} className="secondary-button mb-3 w-full justify-center xl:hidden">
-              العودة إلى القائمة
-            </button>
-          ) : null}
+          <div className="flex-1 overflow-y-auto scrollbar-thin">{listContent}</div>
+          <div className="border-t border-slate-700/50 p-3 text-center text-[11px] text-slate-400">
+            {visibleRecords.length} سجل على الخريطة
+          </div>
+        </div>
+
+        <div className="relative h-full min-h-[calc(100vh-9rem)]">
           <RealEstateMap
             records={mapRecords}
             selectedId={selectedShareId}
             hoveredId={hoveredMapId}
             onSelect={selectMapRecord}
-            className="h-full"
+            className="h-full min-h-[calc(100vh-9rem)]"
           />
+          <div className="absolute inset-x-3 top-3 z-10 rounded-2xl border border-slate-700/60 bg-[#0c1a36]/90 p-2.5 backdrop-blur md:hidden">
+            <div className="grid gap-2">
+              <input
+                value={filters.query}
+                onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))}
+                placeholder="بحث في الخريطة..."
+                className={fieldClass()}
+              />
+              <select value={filters.city} onChange={(event) => setFilters((current) => ({ ...current, city: event.target.value }))} className={fieldClass()}>
+                <option value="all">كل المدن</option>
+                {cities.map((city) => <option key={city} value={city}>{city}</option>)}
+              </select>
+            </div>
+          </div>
+          <div
+            className={[
+              "absolute inset-x-0 bottom-0 z-20 flex flex-col rounded-t-3xl border-t border-[#c9972f]/30 bg-[#0c1a36] shadow-2xl transition-all duration-300 md:hidden",
+              isMobileMapOpen ? "h-[62%]" : "h-14",
+            ].join(" ")}
+          >
+            <button type="button" onClick={() => setIsMobileMapOpen((current) => !current)} className="h-14 shrink-0 font-extrabold text-white">
+              قائمة السجلات ({visibleRecords.length})
+            </button>
+            {isMobileMapOpen ? <div className="flex-1 overflow-y-auto scrollbar-thin">{listContent}</div> : null}
+          </div>
         </div>
       </section>
     );
@@ -2409,7 +2451,7 @@ export default function Home() {
         </div>
         <div className="grid gap-4 xl:grid-cols-[0.72fr_1.28fr]">
         <form
-          className="h-fit rounded-2xl border border-slate-600/25 bg-[#0f1c34]/92 p-4 shadow-sm"
+          className="h-fit rounded-2xl border border-slate-700/50 bg-[#0f1f3d] p-4 card-glow"
           onSubmit={(event) => {
             event.preventDefault();
             addClient(new FormData(event.currentTarget));
@@ -2447,7 +2489,7 @@ export default function Home() {
             const clientRecords = activeRecords.filter((record) => record.clientId === client.id);
             const isExpanded = expandedClientId === client.id;
             return (
-            <article key={client.id} className="rounded-2xl border border-slate-600/25 bg-[#0f1c34]/92 p-4 shadow-sm">
+            <article key={client.id} className="rounded-2xl border border-slate-700/50 bg-[#0f1f3d] p-4 card-glow">
               <button type="button" onClick={() => setExpandedClientId(isExpanded ? null : client.id)} className="flex w-full flex-wrap items-start justify-between gap-3 text-right">
                 <div>
                   <h3 className="text-lg font-black text-slate-50">{client.name}</h3>
@@ -2488,7 +2530,7 @@ export default function Home() {
           {workspace.reminders.map((reminder) => {
             const record = workspace.records.find((item) => item.id === reminder.recordId);
             return (
-              <div key={reminder.id} className="rounded-lg border border-slate-200 bg-white p-4">
+              <div key={reminder.id} className="rounded-2xl border border-slate-700/50 bg-[#0f1f3d] p-4 card-glow">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="font-black text-slate-950">{reminder.title}</p>
@@ -2540,7 +2582,7 @@ export default function Home() {
         </div>
         <div className="grid gap-3">
           {workspace.notifications.map((item) => (
-            <div key={item.id} className={`rounded-lg border p-4 ${item.read ? "border-slate-200 bg-white" : "border-teal-200 bg-teal-50"}`}>
+            <div key={item.id} className={`rounded-2xl border p-4 card-glow ${item.read ? "border-slate-200 bg-white" : "border-teal-200 bg-teal-50"}`}>
               <p className="font-black text-slate-950">{item.title}</p>
               <p className="mt-1 text-sm leading-7 text-slate-600">{item.body}</p>
               <p className="mt-2 text-xs text-slate-500">{formatDateTime(item.createdAt, workspace.profile.timezone)}</p>
@@ -2571,7 +2613,7 @@ export default function Home() {
               </option>
             ))}
           </select>
-          <div className="mt-4 grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <div className="mt-4 grid gap-3 rounded-2xl border border-slate-700/50 bg-[#172641]/35 p-3">
             <p className="font-black text-slate-950">بيانات الرابط العام</p>
             <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
               <input
@@ -2672,7 +2714,7 @@ export default function Home() {
           </div>
         </Panel>
         <Panel title="نص المشاركة">
-          <pre className="min-h-64 whitespace-pre-wrap rounded-md border border-slate-200 bg-slate-50 p-4 leading-8 text-slate-800">
+          <pre className="min-h-64 whitespace-pre-wrap rounded-2xl border border-slate-700/50 bg-[#172641]/35 p-4 leading-8 text-slate-800">
             {textWithLink || "اختر سجلاً لتجهيز نص المشاركة."}
           </pre>
           <div className="mt-4 grid gap-2">
@@ -2812,7 +2854,7 @@ export default function Home() {
         <div className="grid gap-3">
           {trashedRecords.length > 0 ? (
             trashedRecords.map((record) => (
-              <div key={record.id} className="rounded-lg border border-slate-200 bg-white p-4">
+              <div key={record.id} className="rounded-2xl border border-slate-700/50 bg-[#0f1f3d] p-4 card-glow">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="font-black text-slate-950">{record.title}</p>
@@ -3058,8 +3100,8 @@ export default function Home() {
         <header className="border-b border-slate-700/40 bg-[#071224]/90 px-4 py-4 backdrop-blur lg:px-8">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="grid size-11 place-items-center rounded-2xl border border-amber-300/30 bg-amber-300/15 text-amber-200">
-                <Building2 className="size-6" aria-hidden="true" />
+              <div className="grid size-11 place-items-center rounded-xl gold-gradient shadow-lg">
+                <Building2 className="size-6 text-[#0f1f3d]" strokeWidth={2.4} aria-hidden="true" />
               </div>
               <div>
                 <p className="text-xs font-bold text-amber-300">مفكرة الوسيط</p>
@@ -3077,23 +3119,23 @@ export default function Home() {
           </div>
         </header>
         <section className="mx-auto grid max-w-6xl gap-6 p-4 lg:grid-cols-[0.9fr_1.1fr] lg:p-8">
-          <div className="relative overflow-hidden rounded-3xl border border-amber-300/25 bg-[#0f1c34]/95 p-6 shadow-sm">
-            <div className="pointer-events-none absolute -left-16 -top-16 size-44 rounded-full bg-amber-300/10 blur-2xl" />
-            <p className="text-sm font-bold text-emerald-300">نظام احترافي خاص بالوسطاء</p>
+          <div className="relative overflow-hidden rounded-2xl border border-[#c9972f]/25 navy-gradient p-6 card-glow">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-1 gold-gradient opacity-90" />
+            <p className="text-sm font-bold text-[#e5bc55]">نظام احترافي خاص بالوسطاء</p>
             <h2 className="mt-3 text-4xl font-black leading-tight text-white">سجل دخولك للوصول إلى بياناتك العقارية</h2>
             <p className="mt-4 leading-8 text-slate-300">
               كل حساب له عروضه وطلباته وعملاؤه وتذكيراته الخاصة. لا تظهر بيانات أي مستخدم قبل تسجيل الدخول.
             </p>
             <div className="mt-8 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl border border-slate-600/25 bg-slate-950/25 p-4">
+              <div className="rounded-2xl border border-slate-700/50 bg-[#172641]/55 p-4 card-glow">
                 <p className="text-2xl font-black text-amber-200">خصوصية</p>
                 <p className="mt-1 text-sm text-slate-400">بيانات كل وسيط منفصلة</p>
               </div>
-              <div className="rounded-2xl border border-slate-600/25 bg-slate-950/25 p-4">
+              <div className="rounded-2xl border border-slate-700/50 bg-[#172641]/55 p-4 card-glow">
                 <p className="text-2xl font-black text-emerald-200">AI</p>
                 <p className="mt-1 text-sm text-slate-400">إدخال ذكي وسريع</p>
               </div>
-              <div className="rounded-2xl border border-slate-600/25 bg-slate-950/25 p-4">
+              <div className="rounded-2xl border border-slate-700/50 bg-[#172641]/55 p-4 card-glow">
                 <p className="text-2xl font-black text-sky-200">خرائط</p>
                 <p className="mt-1 text-sm text-slate-400">مواقع وسجلات واضحة</p>
               </div>
@@ -3269,8 +3311,8 @@ export default function Home() {
 
   if (!authReady) {
     return (
-      <main className="grid min-h-screen place-items-center bg-slate-100 p-4 text-slate-950">
-        <div className="rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm">
+      <main className="grid min-h-screen place-items-center bg-[#071224] p-4 text-white">
+        <div className="rounded-2xl border border-[#c9972f]/25 bg-[#0f1f3d] p-6 text-center card-glow">
           <p className="font-black">جاري تجهيز الدخول الآمن...</p>
         </div>
       </main>
@@ -3287,22 +3329,22 @@ export default function Home() {
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#071224] text-slate-50">
-      <div className="flex min-h-screen">
-        <aside className="hidden w-72 shrink-0 border-l border-slate-700/40 bg-[#0a162a]/95 lg:block">
+      <div className="min-h-screen">
+        <aside className="fixed right-0 top-0 z-40 hidden h-screen w-64 flex-col border-l border-slate-700/40 bg-[#0c1a36] md:flex">
           <div className="border-b border-slate-700/40 p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold text-amber-300">مفكرة الوسيط</p>
-                <h1 className="mt-1 text-xl font-black text-white">العقاري 🏠</h1>
+            <div className="flex items-center gap-3">
+              <div className="grid size-11 place-items-center rounded-xl gold-gradient shadow-lg">
+                <Building2 className="size-6 text-[#0f1f3d]" strokeWidth={2.4} aria-hidden="true" />
               </div>
-              <div className="grid size-12 place-items-center rounded-2xl border border-amber-300/30 bg-amber-300/15 text-amber-200">
-                <Building2 className="size-6" aria-hidden="true" />
+              <div>
+                <h1 className="text-lg font-extrabold leading-tight text-white">مفكرة الوسيط</h1>
+                <p className="text-xs font-semibold text-[#c9972f]">العقاري</p>
               </div>
             </div>
-            <div className="mt-4 rounded-2xl border border-slate-600/30 bg-slate-950/25 p-4">
-              <p className="font-black text-white">{workspace.profile.name}</p>
-              <p className="mt-1 text-xs text-slate-400">{authUser?.phone || authUser?.email}</p>
-              <span className="mt-3 inline-flex rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1 text-xs font-black text-amber-200">
+            <div className="mt-4 rounded-xl border border-slate-700/55 bg-[#172641]/60 p-3">
+              <p className="text-sm font-bold text-white">{workspace.profile.name}</p>
+              <p className="mt-0.5 text-xs text-slate-400">{authUser?.phone || authUser?.email}</p>
+              <span className="mt-2 inline-flex rounded-full border border-[#c9972f]/30 bg-[#c9972f]/15 px-2 py-0.5 text-[11px] font-bold text-[#e5bc55]">
                 وسيط نشط
               </span>
             </div>
@@ -3311,7 +3353,7 @@ export default function Home() {
               إضافة عرض
             </button>
           </div>
-          <nav className="grid gap-1 p-3">
+          <nav className="flex-1 space-y-1 overflow-y-auto p-3 scrollbar-thin">
             {navItems.map((item) => {
               const Icon = item.icon;
               return (
@@ -3320,8 +3362,8 @@ export default function Home() {
                   type="button"
                   onClick={() => setView(item.id)}
                   className={[
-                    "flex h-12 items-center gap-3 rounded-xl px-3 text-sm font-bold transition",
-                    view === item.id ? "border border-amber-300/30 bg-amber-300/15 text-amber-100" : "text-slate-300 hover:bg-slate-800/60 hover:text-white",
+                    "flex h-12 items-center gap-3 rounded-xl border px-3 text-sm font-semibold transition",
+                    view === item.id ? "border-[#c9972f]/30 bg-[#c9972f]/15 text-[#e5bc55]" : "border-transparent text-slate-400 hover:bg-[#172641]/70 hover:text-white",
                   ].join(" ")}
                 >
                   <Icon className="size-4" aria-hidden="true" />
@@ -3332,12 +3374,12 @@ export default function Home() {
           </nav>
         </aside>
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 md:mr-64">
           <header className="sticky top-0 z-20 border-b border-slate-700/40 bg-[#071224]/90 px-4 py-4 backdrop-blur lg:px-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-bold text-emerald-300">مفكرة الوسيط جاهزة للوسطاء وفريقك</p>
-                <h2 className="mt-1 text-3xl font-black text-white">{activeTitle}</h2>
+                <p className="text-xs font-bold text-[#c9972f]">مفكرة الوسيط</p>
+                <h2 className="mt-1 text-2xl font-extrabold text-white md:text-3xl">{activeTitle}</h2>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button type="button" onClick={() => { setQuickEntryMode("whatsapp"); setQuickAddOpen(true); }} className="primary-button">
@@ -3355,11 +3397,11 @@ export default function Home() {
               </div>
             </div>
           </header>
-          <div className="p-4 pb-28 lg:p-6">{renderContent()}</div>
+          <div className={view === "map" ? "pb-24 md:pb-0" : "mx-auto max-w-6xl p-4 pb-28 md:p-6"}>{renderContent()}</div>
         </div>
       </div>
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-700/40 bg-[#0a162a]/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-2xl backdrop-blur lg:hidden" aria-label="التنقل الرئيسي للجوال">
-        <div className="grid grid-cols-5 gap-1">
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-700/40 bg-[#0c1a36]/95 pb-safe shadow-2xl backdrop-blur md:hidden" aria-label="التنقل الرئيسي للجوال">
+        <div className="grid h-16 grid-cols-5">
           {navItems.filter((item) => item.id !== "clients").map((item) => {
             const Icon = item.icon;
             return (
@@ -3368,11 +3410,11 @@ export default function Home() {
                 type="button"
                 onClick={() => setView(item.id)}
                 className={[
-                  "relative flex h-14 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-black transition",
-                  view === item.id ? "bg-amber-300 text-slate-950" : "text-slate-300 hover:bg-slate-800/80 hover:text-white",
+                  "relative flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold transition",
+                  view === item.id ? "text-[#e5bc55]" : "text-slate-400 hover:text-white",
                 ].join(" ")}
               >
-                {view === item.id ? <span className="absolute top-0 h-0.5 w-8 rounded-full bg-slate-950/70" /> : null}
+                {view === item.id ? <span className="absolute top-0 h-0.5 w-8 rounded-full bg-[#c9972f]" /> : null}
                 <Icon className="size-5" aria-hidden="true" />
                 <span>{item.label}</span>
                 {item.id === "dashboard" && dueReminders > 0 ? <span className="absolute end-2 top-1 rounded-full bg-red-500 px-1.5 text-[10px] text-white">{dueReminders}</span> : null}
@@ -3384,10 +3426,10 @@ export default function Home() {
       <button
         type="button"
         onClick={() => { setQuickEntryMode("manual"); setQuickAddOpen(true); }}
-        className="fixed bottom-24 left-5 z-40 grid size-14 place-items-center rounded-2xl bg-amber-300 text-slate-950 shadow-xl shadow-black/30 transition hover:-translate-y-1 hover:bg-amber-200 lg:bottom-5"
+        className="fixed bottom-20 left-4 z-40 grid size-14 place-items-center rounded-full gold-gradient shadow-xl shadow-[#c9972f]/25 transition hover:-translate-y-1 md:bottom-5"
         aria-label="إضافة سريع"
       >
-        <Plus className="size-7" aria-hidden="true" />
+        <Plus className="size-7 text-[#0f1f3d]" strokeWidth={3} aria-hidden="true" />
       </button>
       {renderQuickAddModal()}
       {renderRecordDetailsModal()}
@@ -3398,8 +3440,8 @@ export default function Home() {
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border border-slate-600/25 bg-[#0f1c34]/92 p-4 shadow-sm">
-      <h2 className="mb-4 text-lg font-black text-slate-50">{title}</h2>
+    <section className="rounded-2xl border border-slate-700/50 bg-[#0f1f3d] p-4 card-glow">
+      <h2 className="mb-4 text-lg font-extrabold text-white">{title}</h2>
       {children}
     </section>
   );
@@ -3407,7 +3449,7 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 
 function EmptyState({ label }: { label: string }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-600/35 bg-slate-950/20 p-8 text-center font-bold text-slate-400">
+    <div className="rounded-2xl border border-dashed border-slate-700/65 bg-[#0f1f3d]/55 p-8 text-center font-bold text-slate-400">
       {label}
     </div>
   );
@@ -3424,9 +3466,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function Info({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl border border-slate-600/25 bg-slate-950/25 p-3">
+    <div className="rounded-xl border border-slate-700/55 bg-[#172641]/45 p-3">
       <p className="text-xs font-bold text-slate-400">{label}</p>
-      <p className="mt-1 font-black text-slate-50">{value}</p>
+      <p className="mt-1 font-extrabold text-white">{value}</p>
     </div>
   );
 }
