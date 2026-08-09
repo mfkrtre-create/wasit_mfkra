@@ -38,6 +38,7 @@ import {
 import { LocationPicker } from "@/components/LocationPicker";
 import { RealEstateMap } from "@/components/RealEstateMap";
 import { ReferenceDashboard, referenceDashboardIcons } from "@/components/reference-ui/ReferenceDashboard";
+import { ReferenceShell } from "@/components/reference-ui/ReferenceShell";
 import { filterMapRecords, type MapRecord } from "@/lib/map-records";
 import { formatArea, parseOptionalPositiveDecimal, parseOptionalPositiveInteger } from "@/lib/number-utils";
 import { type PropertyData } from "@/lib/property-schema";
@@ -3342,103 +3343,31 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#071224] text-slate-50">
-      <div className="min-h-screen">
-        <aside className="fixed right-0 top-0 z-40 hidden h-screen w-64 flex-col border-l border-slate-700/40 bg-[#0c1a36] md:flex">
-          <div className="border-b border-slate-700/40 p-5">
-            <div className="flex items-center gap-3">
-              <div className="grid size-11 place-items-center rounded-xl gold-gradient shadow-lg">
-                <Building2 className="size-6 text-[#0f1f3d]" strokeWidth={2.4} aria-hidden="true" />
-              </div>
-              <div>
-                <h1 className="text-lg font-extrabold leading-tight text-white">مفكرة الوسيط</h1>
-                <p className="text-xs font-semibold text-[#c9972f]">العقاري</p>
-              </div>
-            </div>
-          </div>
-          <div className="px-4 py-3">
-            <div className="rounded-xl border border-slate-700/55 bg-[#172641]/60 p-3">
-              <p className="text-sm font-bold text-white">{workspace.profile.name}</p>
-              <p className="mt-0.5 text-xs text-slate-400">فال: {authUser?.falLicense || workspace.records.find((record) => record.falLicense)?.falLicense || "غير مضاف"}</p>
-              <span className="mt-2 inline-flex rounded-full border border-[#c9972f]/30 bg-[#c9972f]/15 px-2 py-0.5 text-[11px] font-bold text-[#e5bc55]">
-                {brokerTierLabel(workspace.profile, authUser)}
-              </span>
-            </div>
-          </div>
-          <nav className="flex-1 space-y-1 overflow-y-auto p-3 scrollbar-thin">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setView(item.id)}
-                  className={[
-                    "flex h-12 items-center gap-3 rounded-xl border px-3 text-sm font-semibold transition",
-                    view === item.id ? "border-[#c9972f]/30 bg-[#c9972f]/15 text-[#e5bc55]" : "border-transparent text-slate-400 hover:bg-[#172641]/70 hover:text-white",
-                  ].join(" ")}
-                >
-                  <Icon className="size-4" aria-hidden="true" />
-                  {item.label}
-                </button>
-              );
-            })}
-          </nav>
-          <div className="border-t border-slate-700/40 p-4">
-            <button
-              type="button"
-              onClick={() => {
-                setQuickKind("offer");
-                setQuickEntryMode("manual");
-                setQuickAddOpen(true);
-              }}
-              className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 font-extrabold text-[#0f1f3d] shadow-lg transition-all hover:brightness-110 active:scale-[0.98] gold-gradient"
-            >
-              <Plus className="size-5" strokeWidth={3} aria-hidden="true" />
-              إضافة سريعة
-            </button>
-          </div>
-        </aside>
-
-        <div className="min-h-screen min-w-0 md:mr-64">
-          <div className={view === "map" ? "pb-24 md:pb-0" : view === "dashboard" ? "pb-28 md:pb-8" : "mx-auto max-w-6xl p-4 pb-28 md:p-6 md:pb-8"}>{renderContent()}</div>
-        </div>
-      </div>
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-700/40 bg-[#0c1a36]/95 pb-safe shadow-2xl backdrop-blur md:hidden" aria-label="التنقل الرئيسي للجوال">
-        <div className="grid h-16 grid-cols-5">
-          {navItems.filter((item) => item.id !== "clients").map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setView(item.id)}
-                className={[
-                  "relative flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold transition",
-                  view === item.id ? "text-[#e5bc55]" : "text-slate-400 hover:text-white",
-                ].join(" ")}
-              >
-                {view === item.id ? <span className="absolute top-0 h-0.5 w-8 rounded-full bg-[#c9972f]" /> : null}
-                <Icon className="size-5" aria-hidden="true" />
-                <span>{item.label}</span>
-                {item.id === "dashboard" && dueReminders > 0 ? <span className="absolute end-2 top-1 rounded-full bg-red-500 px-1.5 text-[10px] text-white">{dueReminders}</span> : null}
-              </button>
-            );
-          })}
-        </div>
-      </nav>
-      <button
-        type="button"
-        onClick={() => { setQuickEntryMode("manual"); setQuickAddOpen(true); }}
-        className="fixed bottom-20 left-4 z-40 grid size-14 place-items-center rounded-full gold-gradient shadow-xl shadow-[#c9972f]/25 transition hover:-translate-y-1 md:hidden"
-        aria-label="إضافة سريع"
-      >
-        <Plus className="size-7 text-[#0f1f3d]" strokeWidth={3} aria-hidden="true" />
-      </button>
-      {renderQuickAddModal()}
-      {renderRecordDetailsModal()}
-      {renderShareModal()}
-    </main>
+    <ReferenceShell
+      profileName={workspace.profile.name}
+      falLicense={authUser?.falLicense || workspace.records.find((record) => record.falLicense)?.falLicense || "غير مضاف"}
+      tier={brokerTierLabel(workspace.profile, authUser)}
+      navItems={navItems}
+      activeView={view}
+      dashboardBadgeCount={dueReminders}
+      mapViewId="map"
+      clientsViewId="clients"
+      onNavigate={setView}
+      onQuickAdd={() => {
+        setQuickKind("offer");
+        setQuickEntryMode("manual");
+        setQuickAddOpen(true);
+      }}
+      modals={
+        <>
+          {renderQuickAddModal()}
+          {renderRecordDetailsModal()}
+          {renderShareModal()}
+        </>
+      }
+    >
+      {renderContent()}
+    </ReferenceShell>
   );
 }
 

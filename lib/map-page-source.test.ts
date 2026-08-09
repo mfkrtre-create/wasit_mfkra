@@ -123,9 +123,11 @@ describe("map page source", () => {
   it("implements the approved broker workspace layout and advanced quick entry", () => {
     const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
     const referenceDashboardSource = readFileSync(join(process.cwd(), "components", "reference-ui", "ReferenceDashboard.tsx"), "utf8");
-    const dashboardSource = `${pageSource}\n${referenceDashboardSource}`;
+    const referenceShellSource = readFileSync(join(process.cwd(), "components", "reference-ui", "ReferenceShell.tsx"), "utf8");
+    const dashboardSource = `${pageSource}\n${referenceDashboardSource}\n${referenceShellSource}`;
 
     expect(pageSource).toContain("ReferenceDashboard");
+    expect(pageSource).toContain("ReferenceShell");
     expect(dashboardSource).toContain("إعلانات تجاوزت موعد تحديثها");
     expect(dashboardSource).toContain("مراسلة لتحديث العقار");
     expect(dashboardSource).toContain("سجل النشاط");
@@ -147,12 +149,14 @@ describe("map page source", () => {
 
   it("implements mobile bottom navigation, notification bell, details modal, and same-page share modal", () => {
     const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
+    const referenceShellSource = readFileSync(join(process.cwd(), "components", "reference-ui", "ReferenceShell.tsx"), "utf8");
+    const shellAndPageSource = `${pageSource}\n${referenceShellSource}`;
     const mapSource = readFileSync(join(process.cwd(), "components", "RealEstateMap.tsx"), "utf8");
 
-    expect(pageSource).toContain('aria-label="التنقل الرئيسي للجوال"');
-    expect(pageSource).toContain("pb-safe");
-    expect(pageSource).toContain("border-t border-slate-700/40 p-4");
-    expect(pageSource).toContain("إضافة سريعة");
+    expect(shellAndPageSource).toContain('aria-label="التنقل الرئيسي للجوال"');
+    expect(shellAndPageSource).toContain("pb-safe");
+    expect(shellAndPageSource).toContain("border-t border-slate-700/40 p-4");
+    expect(shellAndPageSource).toContain("إضافة سريعة");
     expect(pageSource).not.toContain('aria-label="الإشعارات"');
     expect(pageSource).toContain("renderRecordDetailsModal");
     expect(pageSource).toContain("setShareModalOpen(true)");
