@@ -1,0 +1,457 @@
+import { useMemo } from 'react';
+import { AlertTriangle, MapPin } from 'lucide-react';
+import type { InputSource, ListingKind, PriceMode, PropertyType } from '@/ui/types';
+import { OFFER_STATUS_LABELS, PROPERTY_TYPE_LABELS, REQUEST_STATUS_LABELS } from '@/ui/types';
+import { TYPE_FIELDS, type FieldDef } from '@/ui/lib/fieldDefs';
+import { landMeterFromTotal, landTotalFromMeter } from '@/ui/lib/parser';
+import { getProfile } from '@/ui/lib/db';
+import { cn } from '@/ui/lib/utils';
+import { Switch } from '@/ui/components/ui/switch';
+import { MapPicker } from '@/ui/components/MapPicker';
+
+export interface Draft {
+  kind: ListingKind;
+  status: string;
+  propertyType: PropertyType;
+  title: string;
+  titleTouched: boolean;
+  city: string;
+  district: string;
+  priceAsk?: number;
+  priceBid?: number;
+  priceMode: PriceMode;
+  priceAmbiguous?: boolean;
+  lat?: number;
+  lng?: number;
+  fields: Record<string, string | number | boolean | undefined>;
+  falLicense?: string;
+  adLicense?: string;
+  ownerName?: string;
+  ownerPhone?: string;
+  clientName?: string;
+  clientPhone?: string;
+  notes?: string;
+  source: InputSource;
+  rawText?: string;
+  refreshIntervalDays: 7 | 14 | 30;
+}
+
+export const emptyDraft = (kind: ListingKind, source: InputSource): Draft => ({
+  kind,
+  status: kind === 'offer' ? 'for_sale' : 'buy',
+  propertyType: 'land',
+  title: '',
+  titleTouched: false,
+  city: getProfile().city || 'الرياض',
+  district: '',
+  priceMode: 'ask',
+  fields: {},
+  falLicense: getProfile().falLicense,
+  source,
+  refreshIntervalDays: 14,
+});
+
+export function autoTitle(d: Pick<Draft, 'propertyType' | 'status' | 'district' | 'kind'>): string {
+  const type = PROPERTY_TYPE_LABELS[d.propertyType].split(' ')[0];
+  const action =
+    d.kind === 'offer'
+      ? OFFER_STATUS_LABELS[d.status as keyof typeof OFFER_STATUS_LABELS] ?? 'للبيع'
+      : d.status === 'rent'
+        ? 'استئجار'
+        : 'شراء';
+  const place = d.district ? ` في حي ${d.district}` : '';
+  return d.kind === 'offer' ? `${type} ${action}${place}` : `مطلوب ${type} ${action}${place}`;
+}
+
+const OFFER_STATUSES = Object.entries(OFFER_STATUS_LABELS).filter(([k]) => k !== 'archived') as [string, string][];
+const REQUEST_STATUSES = Object.entries(REQUEST_STATUS_LABELS).filter(([k]) => k !== 'archived') as [string, string][];
+
+function FieldInput({
+  def,
+  value,
+  onChange,
+}: {
+  def: FieldDef;
+  value: string | number | boolean | undefined;
+  onChange: (v: string | number | boolean | undefined) => void;
+}) {
+  if (def.input === 'boolean') {
+    return (
+      <div className="flex items-center justify-between rounded-xl border border-border bg-secondary/40 px-3.5 py-2.5">
+        <span className="text-sm font-semibold text-slate-200">{def.label}</span>
+        <div className="flex items-center gap-2">
+          <span className={cn('text-xs font-bold', value ? 'text-emerald-400' : 'text-muted-foreground')}>
+            {value ? 'نعم' : 'لا'}
+          </span>
+          <Switch checked={Boolean(value)} onCheckedChange={onChange} />
+        </div>
+      </div>
+    );
+  }
+  if (def.input === 'select') {
+    return (
+      <div className="space-y-1.5">
+        <span className="text-xs font-bold text-muted-foreground">{def.label}</span>
+        <div className="flex flex-wrap gap-1.5">
+          {def.options!.map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => onChange(value === opt ? undefined : opt)}
+              className={cn(
+                'text-xs font-bold px-3 py-1.5 rounded-full border transition-colors',
+                value === opt
+                  ? 'bg-[#c9972f]/20 border-[#c9972f] text-[#e5bc55]'
+                  : 'bg-secondary/50 border-border text-slate-300 hover:border-[#c9972f]/40',
+              )}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <label className="space-y-1.5 block">
+      <span className="text-xs font-bold text-muted-foreground">
+        {def.label} {def.unit && <span className="text-[#c9972f]/80">({def.unit})</span>}
+      </span>
+      <input
+        type={def.input}
+        value={value === undefined || value === null ? '' : String(value)}
+        placeholder={def.placeholder}
+        onChange={(e) => {
+          const raw = e.target.value;
+          if (def.input === 'number') onChange(raw === '' ? undefined : Number(raw));
+          else onChange(raw === '' ? undefined : raw);
+        }}
+        className={cn(
+          'w-full bg-secondary/50 border border-border rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#c9972f]/60 placeholder:text-muted-foreground/60',
+          def.input === 'number' && 'nums-latin',
+        )}
+      />
+    </label>
+  );
+}
+
+export function DraftEditor({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => void }) {
+  const set = <K extends keyof Draft>(key: K, value: Draft[K]) => {
+    const next = { ...draft, [key]: value };
+    if (!next.titleTouched && ['propertyType', 'status', 'district', 'kind'].includes(key as string)) {
+      next.title = autoTitle(next);
+    }
+    onChange(next);
+  };
+
+  const setField = (key: string, value: string | number | boolean | undefined) => {
+    const fields = { ...draft.fields, [key]: value };
+    const next = { ...draft, fields };
+    // land: سعر المتر → السعر الإجمالي
+    if (draft.propertyType === 'land' && (key === 'meterPrice' || key === 'area')) {
+      const total = landTotalFromMeter(
+        key === 'meterPrice' ? (value as number) : (fields.meterPrice as number),
+        key === 'area' ? (value as number) : (fields.area as number),
+      );
+      if (total !== undefined) next.priceAsk = total;
+    }
+    onChange(next);
+  };
+
+  const setPriceAsk = (v?: number) => {
+    const next = { ...draft, priceAsk: v };
+    // land: السعر الإجمالي → سعر المتر
+    if (draft.propertyType === 'land' && v && draft.fields.area) {
+      const mp = landMeterFromTotal(v, draft.fields.area as number);
+      if (mp) next.fields = { ...next.fields, meterPrice: mp };
+    }
+    onChange(next);
+  };
+
+  const fieldDefs = useMemo(() => {
+    return TYPE_FIELDS[draft.propertyType].filter((f) => !f.childOf || Boolean(draft.fields[f.childOf]));
+  }, [draft.propertyType, draft.fields]);
+
+  const isRequest = draft.kind === 'request';
+
+  return (
+    <div className="space-y-4">
+      {/* kind toggle */}
+      <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-secondary/60 border border-border">
+        {(['offer', 'request'] as const).map((k) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() =>
+              onChange({
+                ...draft,
+                kind: k,
+                status: k === 'offer' ? 'for_sale' : 'buy',
+                title: draft.titleTouched ? draft.title : '',
+              })
+            }
+            className={cn(
+              'py-2.5 rounded-lg text-sm font-extrabold transition-all',
+              draft.kind === k ? 'gold-gradient text-[#0f1f3d] shadow' : 'text-muted-foreground hover:text-white',
+            )}
+          >
+            {k === 'offer' ? '🏷️ عرض (أعرض عقاراً)' : '📥 طلب (مطلوب من عميل)'}
+          </button>
+        ))}
+      </div>
+
+      {/* status pills */}
+      <div className="space-y-1.5">
+        <span className="text-xs font-bold text-muted-foreground">حالة الإعلان</span>
+        <div className="flex flex-wrap gap-1.5">
+          {(isRequest ? REQUEST_STATUSES : OFFER_STATUSES).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => set('status', value)}
+              className={cn(
+                'text-xs font-bold px-3.5 py-2 rounded-full border transition-colors',
+                draft.status === value
+                  ? 'bg-[#c9972f]/20 border-[#c9972f] text-[#e5bc55]'
+                  : 'bg-secondary/50 border-border text-slate-300 hover:border-[#c9972f]/40',
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* property type */}
+      <div className="space-y-1.5">
+        <span className="text-xs font-bold text-muted-foreground">نوع العقار</span>
+        <div className="grid grid-cols-4 gap-1.5">
+          {(Object.entries(PROPERTY_TYPE_LABELS) as [PropertyType, string][]).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => onChange({ ...draft, propertyType: value, fields: {}, title: draft.titleTouched ? draft.title : autoTitle({ ...draft, propertyType: value }) })}
+              className={cn(
+                'py-2 px-1 rounded-xl border text-[11px] sm:text-xs font-bold transition-colors leading-tight',
+                draft.propertyType === value
+                  ? 'bg-[#c9972f]/20 border-[#c9972f] text-[#e5bc55]'
+                  : 'bg-secondary/50 border-border text-slate-300 hover:border-[#c9972f]/40',
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* title + location */}
+      <div className="grid sm:grid-cols-2 gap-2.5">
+        <label className="space-y-1.5 block sm:col-span-2">
+          <span className="text-xs font-bold text-muted-foreground">عنوان الإعلان</span>
+          <input
+            value={draft.title}
+            onChange={(e) => onChange({ ...draft, title: e.target.value, titleTouched: true })}
+            placeholder="مثال: أرض للبيع في حي الياسمين"
+            className="w-full bg-secondary/50 border border-border rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#c9972f]/60"
+          />
+        </label>
+        <label className="space-y-1.5 block">
+          <span className="text-xs font-bold text-muted-foreground">المدينة</span>
+          <input
+            value={draft.city}
+            onChange={(e) => set('city', e.target.value)}
+            className="w-full bg-secondary/50 border border-border rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#c9972f]/60"
+          />
+        </label>
+        <label className="space-y-1.5 block">
+          <span className="text-xs font-bold text-muted-foreground">الحي</span>
+          <input
+            value={draft.district}
+            onChange={(e) => set('district', e.target.value)}
+            placeholder="مثال: الياسمين"
+            className="w-full bg-secondary/50 border border-border rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#c9972f]/60"
+          />
+        </label>
+      </div>
+
+      {/* prices: سوم vs حد */}
+      <div className="grid grid-cols-2 gap-2.5">
+        <label className="space-y-1.5 block">
+          <span className="text-xs font-bold text-muted-foreground">
+            🏷️ سعر البيع / الحد {draft.propertyType === 'land' && <span className="text-[#c9972f]/80">(إجمالي الأرض)</span>}
+          </span>
+          <input
+            type="number"
+            value={draft.priceAsk ?? ''}
+            onChange={(e) => setPriceAsk(e.target.value === '' ? undefined : Number(e.target.value))}
+            className="w-full bg-secondary/50 border border-border rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#c9972f]/60 nums-latin"
+          />
+        </label>
+        <label className="space-y-1.5 block">
+          <span className="text-xs font-bold text-muted-foreground">💬 سعر السوم (قابل للتحديث)</span>
+          <input
+            type="number"
+            value={draft.priceBid ?? ''}
+            onChange={(e) => set('priceBid', e.target.value === '' ? undefined : Number(e.target.value))}
+            className="w-full bg-secondary/50 border border-border rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#c9972f]/60 nums-latin"
+          />
+        </label>
+      </div>
+
+      {/* price mode + ambiguous toggle */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-bold text-muted-foreground">السعر الأساسي المعروض:</span>
+        {(['ask', 'bid'] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => onChange({ ...draft, priceMode: m, priceAmbiguous: false })}
+            className={cn(
+              'text-xs font-bold px-3 py-1.5 rounded-full border transition-colors',
+              draft.priceMode === m
+                ? 'bg-[#c9972f]/20 border-[#c9972f] text-[#e5bc55]'
+                : 'bg-secondary/50 border-border text-slate-300',
+            )}
+          >
+            {m === 'ask' ? '🏷️ الحد' : '💬 السوم'}
+          </button>
+        ))}
+        {draft.priceAmbiguous && (
+          <button
+            type="button"
+            onClick={() => onChange({ ...draft, priceMode: draft.priceMode === 'ask' ? 'bid' : 'ask', priceAmbiguous: false })}
+            className="text-[11px] font-extrabold px-3 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 hover:bg-amber-500/25 transition-colors"
+          >
+            🔁 تبديل إلى {draft.priceMode === 'ask' ? 'سوم' : 'حد'}
+          </button>
+        )}
+      </div>
+      {draft.priceAmbiguous && (
+        <p className="text-[11px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2.5 py-1.5">
+          لم يُحدد النص ما إذا كان السعر «سوم» أم «حد» — صُنّف افتراضياً كـ«{draft.priceMode === 'ask' ? 'حد' : 'سوم'}».
+        </p>
+      )}
+
+      {/* dynamic fields by type */}
+      <div className="space-y-2.5">
+        <span className="text-xs font-bold text-muted-foreground">
+          تفاصيل {PROPERTY_TYPE_LABELS[draft.propertyType]}
+        </span>
+        <div className="grid sm:grid-cols-2 gap-2.5">
+          {fieldDefs.map((def) => (
+            <div key={def.key} className={cn(def.input === 'boolean' || def.input === 'select' ? 'sm:col-span-2' : '')}>
+              <FieldInput def={def} value={draft.fields[def.key]} onChange={(v) => setField(def.key, v)} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* licenses */}
+      <div className="grid sm:grid-cols-2 gap-2.5">
+        <label className="space-y-1.5 block">
+          <span className="text-xs font-bold text-muted-foreground">🪪 رقم رخصة فال</span>
+          <input
+            value={draft.falLicense ?? ''}
+            onChange={(e) => set('falLicense', e.target.value)}
+            className="w-full bg-secondary/50 border border-border rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#c9972f]/60 nums-latin"
+          />
+        </label>
+        <label className="space-y-1.5 block">
+          <span className="text-xs font-bold text-muted-foreground">📢 رقم الإعلان العقاري (اختياري)</span>
+          <input
+            value={draft.adLicense ?? ''}
+            onChange={(e) => set('adLicense', e.target.value)}
+            className="w-full bg-secondary/50 border border-border rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#c9972f]/60 nums-latin"
+          />
+        </label>
+      </div>
+      {!draft.adLicense && (
+        <div className="flex items-center gap-2 text-[11px] font-semibold text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2.5 py-1.5">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+          تنبيه: رقم الإعلان العقاري غير مُدخل — يمكنك الحفظ الآن وإضافته لاحقاً.
+        </div>
+      )}
+
+      {/* contact */}
+      <div className="grid sm:grid-cols-2 gap-2.5">
+        <label className="space-y-1.5 block">
+          <span className="text-xs font-bold text-muted-foreground">{isRequest ? '👤 اسم العميل' : '👤 اسم المالك'}</span>
+          <input
+            value={(isRequest ? draft.clientName : draft.ownerName) ?? ''}
+            onChange={(e) => set(isRequest ? 'clientName' : 'ownerName', e.target.value)}
+            className="w-full bg-secondary/50 border border-border rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#c9972f]/60"
+          />
+        </label>
+        <label className="space-y-1.5 block">
+          <span className="text-xs font-bold text-muted-foreground">📞 الجوال</span>
+          <input
+            value={(isRequest ? draft.clientPhone : draft.ownerPhone) ?? ''}
+            onChange={(e) => set(isRequest ? 'clientPhone' : 'ownerPhone', e.target.value)}
+            placeholder="05xxxxxxxx"
+            className="w-full bg-secondary/50 border border-border rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#c9972f]/60 nums-latin"
+          />
+        </label>
+      </div>
+
+      {/* map pin — mandatory */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold text-muted-foreground flex items-center gap-1">
+            <MapPin className="w-3.5 h-3.5 text-[#c9972f]" />
+            موقع العقار على الخريطة <span className="text-red-400">* إلزامي</span>
+          </span>
+          {draft.lat && (
+            <span className="text-[11px] font-bold text-emerald-400">
+              ✅ {draft.lat.toFixed(4)}, {draft.lng!.toFixed(4)}
+            </span>
+          )}
+        </div>
+        <MapPicker
+          value={draft.lat ? { lat: draft.lat, lng: draft.lng! } : null}
+          onChange={(ll) => onChange({ ...draft, lat: ll.lat, lng: ll.lng })}
+          onDistrictFound={(district) => {
+            if (!draft.district) set('district', district);
+          }}
+        />
+        {!draft.lat && (
+          <p className="text-[11px] font-semibold text-red-300/90 bg-red-500/10 border border-red-500/20 rounded-lg px-2.5 py-1.5">
+            يجب تثبيت الدبوس على الخريطة قبل الحفظ — استخدم البحث أو زر «GPS — أنا هنا».
+          </p>
+        )}
+      </div>
+
+      {/* refresh interval */}
+      <div className="space-y-1.5">
+        <span className="text-xs font-bold text-muted-foreground">⏱️ فترة التذكير بتحديث الإعلان</span>
+        <div className="flex gap-1.5">
+          {([7, 14, 30] as const).map((d) => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => set('refreshIntervalDays', d)}
+              className={cn(
+                'flex-1 py-2 rounded-xl border text-xs font-extrabold transition-colors',
+                draft.refreshIntervalDays === d
+                  ? 'bg-[#c9972f]/20 border-[#c9972f] text-[#e5bc55]'
+                  : 'bg-secondary/50 border-border text-slate-300 hover:border-[#c9972f]/40',
+              )}
+            >
+              كل {d} يوم
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* notes */}
+      <label className="space-y-1.5 block">
+        <span className="text-xs font-bold text-muted-foreground">📝 ملاحظات</span>
+        <textarea
+          value={draft.notes ?? ''}
+          onChange={(e) => set('notes', e.target.value)}
+          rows={2}
+          className="w-full bg-secondary/50 border border-border rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#c9972f]/60 resize-none"
+        />
+      </label>
+    </div>
+  );
+}

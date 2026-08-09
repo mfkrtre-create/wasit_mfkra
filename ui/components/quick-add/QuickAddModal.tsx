@@ -1,0 +1,303 @@
+import { useEffect, useRef, useState } from 'react';
+import { Keyboard, MessageSquareText, Mic, MicOff, ArrowRight, Save, Sparkles, CheckCircle2 } from 'lucide-react';
+import { useApp } from '@/ui/context/AppContext';
+import { db } from '@/ui/lib/db';
+import { parseListingText, type ParsedListing } from '@/ui/lib/parser';
+import { PROPERTY_TYPE_LABELS, type Listing } from '@/ui/types';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/ui/components/ui/dialog';
+import { cn } from '@/ui/lib/utils';
+import { autoTitle, emptyDraft, DraftEditor, type Draft } from './DraftEditor';
+import { toast } from 'sonner';
+
+type Tab = 'manual' | 'paste' | 'voice';
+type Step = 'input' | 'review';
+
+const TABS: Array<{ key: Tab; label: string; icon: typeof Keyboard; hint: string }> = [
+  { key: 'manual', label: 'إدخال يدوي', icon: Keyboard, hint: 'اختر النوع وعبّئ الحقول' },
+  { key: 'paste', label: 'لصق واتساب', icon: MessageSquareText, hint: 'حلّل نص إعلان جاهز' },
+  { key: 'voice', label: 'إدخال صوتي', icon: Mic, hint: 'تحدث وسنستخرج البيانات' },
+];
+
+function draftFromParsed(parsed: ParsedListing, source: 'whatsapp' | 'voice', rawText: string, fallbackKind: 'offer' | 'request'): Draft {
+  const base = emptyDraft(parsed.kind ?? fallbackKind, source);
+  const draft: Draft = {
+    ...base,
+    kind: parsed.kind,
+    status: parsed.status,
+    propertyType: parsed.propertyType,
+    district: parsed.district,
+    city: parsed.city || base.city,
+    fields: parsed.fields,
+    priceMode: parsed.priceMode,
+    priceAmbiguous: parsed.priceAmbiguous,
+    rawText,
+  };
+  if (parsed.priceBid !== undefined) draft.priceBid = parsed.priceBid;
+  if (parsed.priceAsk !== undefined) draft.priceAsk = parsed.priceAsk;
+  draft.title = autoTitle(draft);
+  return draft;
+}
+
+export function QuickAddModal() {
+  const { quickAddOpen, closeQuickAdd, quickAddDefaultKind } = useApp();
+  const [tab, setTab] = useState<Tab>('manual');
+  const [step, setStep] = useState<Step>('input');
+  const [draft, setDraft] = useState<Draft>(() => emptyDraft(quickAddDefaultKind, 'manual'));
+  const [parsed, setParsed] = useState<ParsedListing | null>(null);
+
+  // paste / voice state
+  const [pasteText, setPasteText] = useState('');
+  const [voiceText, setVoiceText] = useState('');
+  const [listening, setListening] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(true);
+  const recognitionRef = useRef<{ stop: () => void } | null>(null);
+
+  // reset when opened
+  useEffect(() => {
+    if (quickAddOpen) {
+      // The reference modal resets its complete draft whenever it opens.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTab('manual');
+      setStep('input');
+      setDraft(emptyDraft(quickAddDefaultKind, 'manual'));
+      setParsed(null);
+      setPasteText('');
+      setVoiceText('');
+      setListening(false);
+      const w = window as unknown as Record<string, unknown>;
+      setVoiceSupported(Boolean(w.SpeechRecognition || w.webkitSpeechRecognition));
+    }
+  }, [quickAddOpen, quickAddDefaultKind]);
+
+  const startVoice = () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as unknown as Record<string, any>;
+    const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
+    if (!SR) {
+      setVoiceSupported(false);
+      return;
+    }
+    const rec = new SR();
+    rec.lang = 'ar-SA';
+    rec.continuous = true;
+    rec.interimResults = true;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rec.onresult = (e: any) => {
+      let finalText = '';
+      for (let i = 0; i < e.results.length; i++) {
+        if (e.results[i].isFinal) finalText += e.results[i][0].transcript + ' ';
+        else finalText += e.results[i][0].transcript + ' ';
+      }
+      setVoiceText(finalText.trim());
+    };
+    rec.onerror = () => {
+      setListening(false);
+      toast.error('تعذر الاستماع — تحقق من صلاحية المايكروفون');
+    };
+    rec.onend = () => setListening(false);
+    recognitionRef.current = rec;
+    rec.start();
+    setListening(true);
+  };
+
+  const stopVoice = () => {
+    recognitionRef.current?.stop();
+    setListening(false);
+  };
+
+  const analyze = (text: string, source: 'whatsapp' | 'voice') => {
+    if (!text.trim()) {
+      toast.error('النص فارغ — أدخل نص الإعلان أولاً');
+      return;
+    }
+    const p = parseListingText(text);
+    setParsed(p);
+    setDraft(draftFromParsed(p, source, text, quickAddDefaultKind));
+    setStep('review');
+  };
+
+  const save = () => {
+    if (!draft.lat || !draft.lng) {
+      toast.error('📍 ثبّت موقع العقار على الخريطة أولاً (إلزامي)');
+      return;
+    }
+    if (!draft.title.trim()) {
+      toast.error('أدخل عنوان الإعلان');
+      return;
+    }
+    const { titleTouched: _t, priceAmbiguous: _p, ...rest } = draft;
+    void _t;
+    void _p;
+    db.addListing({ ...rest, status: rest.status as Listing['status'], title: draft.title.trim() });
+    toast.success(`تم حفظ ${draft.kind === 'offer' ? 'العرض' : 'الطلب'} بنجاح ✅`);
+    closeQuickAdd();
+  };
+
+  return (
+    <Dialog open={quickAddOpen} onOpenChange={(v) => !v && closeQuickAdd()}>
+      <DialogContent className="max-w-2xl w-[calc(100vw-1rem)] sm:w-full bg-[#0f1f3d] border-[#c9972f]/25 text-white max-h-[92vh] h-[92vh] sm:h-auto sm:max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+        <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-5 pb-3 border-b border-border shrink-0">
+          <DialogTitle className="text-lg font-extrabold flex items-center gap-2">
+            <span className="w-9 h-9 rounded-xl gold-gradient flex items-center justify-center text-lg">⚡</span>
+            {step === 'input' ? 'إضافة سريعة' : 'مراجعة قبل الحفظ'}
+          </DialogTitle>
+        </DialogHeader>
+
+        {step === 'input' ? (
+          <>
+            {/* tabs */}
+            <div className="grid grid-cols-3 gap-1.5 px-4 sm:px-6 py-3 shrink-0">
+              {TABS.map(({ key, label, icon: Icon, hint }) => (
+                <button
+                  key={key}
+                  onClick={() => setTab(key)}
+                  className={cn(
+                    'rounded-xl border p-2.5 sm:p-3 text-center transition-all',
+                    tab === key
+                      ? 'border-[#c9972f] bg-[#c9972f]/10 shadow-[0_0_0_1px_#c9972f]'
+                      : 'border-border bg-secondary/40 hover:border-[#c9972f]/40',
+                  )}
+                >
+                  <Icon className={cn('w-5 h-5 mx-auto mb-1', tab === key ? 'text-[#e5bc55]' : 'text-muted-foreground')} />
+                  <span className={cn('block text-xs sm:text-sm font-extrabold', tab === key ? 'text-[#e5bc55]' : 'text-slate-200')}>
+                    {label}
+                  </span>
+                  <span className="hidden sm:block text-[10px] text-muted-foreground mt-0.5">{hint}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1 overflow-y-auto scrollbar-thin px-4 sm:px-6 pb-4">
+              {tab === 'manual' && (
+                <div className="space-y-4">
+                  <DraftEditor draft={draft} onChange={setDraft} />
+                </div>
+              )}
+
+              {tab === 'paste' && (
+                <div className="space-y-3 pt-1">
+                  <div className="rounded-xl border border-[#c9972f]/25 bg-[#c9972f]/5 p-3.5 text-sm text-slate-200 leading-relaxed">
+                    <Sparkles className="w-4 h-4 inline-block ms-1 text-[#e5bc55]" />
+                    الصق نص إعلان واتساب كما هو — سنستخرج تلقائياً: نوع العقار، المساحة، عرض الشارع، الحي، والسعر
+                    (سوم / حد).
+                  </div>
+                  <textarea
+                    value={pasteText}
+                    onChange={(e) => setPasteText(e.target.value)}
+                    rows={8}
+                    placeholder={'مثال:\nأرض للبيع حي الياسمين مساحة 600 شارع 20 شمالية سوم 850000 وحدها 900000\nأو:\nفيلا للايجار حي النرجس 450 متر عمرها 3 سنوات درج صالة الصافي 2.8 مليون'}
+                    className="w-full bg-secondary/50 border border-border rounded-xl px-3.5 py-3 text-sm text-white outline-none focus:border-[#c9972f]/60 resize-none leading-relaxed placeholder:text-muted-foreground/60"
+                  />
+                  <button
+                    onClick={() => analyze(pasteText, 'whatsapp')}
+                    className="w-full gold-gradient text-[#0f1f3d] font-extrabold rounded-xl py-3 flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.99] transition-all"
+                  >
+                    <Sparkles className="w-5 h-5" />
+                    تحليل النص والانتقال للمراجعة
+                  </button>
+                </div>
+              )}
+
+              {tab === 'voice' && (
+                <div className="space-y-3 pt-1">
+                  {!voiceSupported ? (
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200 leading-relaxed">
+                      ⚠️ متصفحك لا يدعم الإدخال الصوتي (Web Speech API). يعمل حالياً على Chrome / Edge. يمكنك كتابة
+                      النص يدوياً أدناه وسيمر بنفس المحلل.
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-border bg-secondary/40 p-4 text-center">
+                      <button
+                        onClick={listening ? stopVoice : startVoice}
+                        className={cn(
+                          'w-20 h-20 rounded-full mx-auto flex items-center justify-center transition-all shadow-xl',
+                          listening
+                            ? 'bg-red-500 animate-pulse shadow-red-500/40'
+                            : 'gold-gradient shadow-[#c9972f]/30 hover:brightness-110',
+                        )}
+                      >
+                        {listening ? <MicOff className="w-9 h-9 text-white" /> : <Mic className="w-9 h-9 text-[#0f1f3d]" />}
+                      </button>
+                      <p className="mt-3 text-sm font-bold text-slate-200">
+                        {listening ? '🔴 جارٍ الاستماع… تحدث بالعربية' : 'اضغط للتحدث (ar-SA)'}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        مثال: «أرض للبيع في حي الياسمين مساحة 600 شارع 20 وصلت سوم 850 ألف»
+                      </p>
+                    </div>
+                  )}
+                  <textarea
+                    value={voiceText}
+                    onChange={(e) => setVoiceText(e.target.value)}
+                    rows={5}
+                    placeholder="سيظهر النص المفرّغ هنا — يمكنك تعديله قبل التحليل…"
+                    className="w-full bg-secondary/50 border border-border rounded-xl px-3.5 py-3 text-sm text-white outline-none focus:border-[#c9972f]/60 resize-none leading-relaxed"
+                  />
+                  <button
+                    onClick={() => analyze(voiceText, 'voice')}
+                    className="w-full gold-gradient text-[#0f1f3d] font-extrabold rounded-xl py-3 flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.99] transition-all"
+                  >
+                    <Sparkles className="w-5 h-5" />
+                    تحليل التفريغ الصوتي والانتقال للمراجعة
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {tab === 'manual' && (
+              <div className="shrink-0 border-t border-border px-4 sm:px-6 py-3 bg-[#0c1a36]">
+                <button
+                  onClick={() => setStep('review')}
+                  className="w-full gold-gradient text-[#0f1f3d] font-extrabold rounded-xl py-3 flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.99] transition-all"
+                >
+                  التالي: المراجعة قبل الحفظ
+                  <ArrowRight className="w-5 h-5 rotate-180" />
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {/* ===== Pre-Save Review Panel ===== */}
+            <div className="flex-1 overflow-y-auto scrollbar-thin px-4 sm:px-6 py-4">
+              {parsed && (
+                <div className="mb-4 rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-3.5">
+                  <p className="text-xs font-extrabold text-emerald-300 mb-2 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4" />
+                    ما تم استخراجه تلقائياً — كل حقل قابل للتعديل:
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="text-[11px] font-bold px-2 py-1 rounded-lg bg-[#c9972f]/15 text-[#e5bc55] border border-[#c9972f]/30">
+                      {PROPERTY_TYPE_LABELS[parsed.propertyType]}
+                    </span>
+                    {parsed.confidence.map((c) => (
+                      <span key={c} className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-secondary/80 text-slate-200 border border-border">
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <DraftEditor draft={draft} onChange={setDraft} />
+            </div>
+            <div className="shrink-0 border-t border-border px-4 sm:px-6 py-3 bg-[#0c1a36] grid grid-cols-[auto_1fr] gap-2.5">
+              <button
+                onClick={() => setStep('input')}
+                className="rounded-xl border border-border bg-secondary/50 text-slate-200 font-bold px-5 py-3 hover:bg-secondary transition-colors"
+              >
+                رجوع
+              </button>
+              <button
+                onClick={save}
+                className="gold-gradient text-[#0f1f3d] font-extrabold rounded-xl py-3 flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.99] transition-all"
+              >
+                <Save className="w-5 h-5" />
+                حفظ {draft.kind === 'offer' ? 'العرض' : 'الطلب'}
+              </button>
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}

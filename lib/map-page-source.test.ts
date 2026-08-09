@@ -1,208 +1,121 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
 
-describe("map page source", () => {
-  it("does not include the old fake grid map fallback", () => {
-    const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
+const source = (...parts: string[]) => readFileSync(join(process.cwd(), ...parts), 'utf8');
 
-    expect(pageSource).not.toContain("خريطة تشغيلية أولية");
-    expect(pageSource).not.toContain("bg-[linear-gradient");
-    expect(pageSource).not.toContain("style={{ right:");
-    expect(pageSource).toContain("RealEstateMap");
+describe('reference frontend integration', () => {
+  it('mounts the complete reference app after authenticated workspace loading', () => {
+    const page = source('app', 'page.tsx');
+    expect(page).toContain("fetch('/api/auth/session'");
+    expect(page).toContain("fetch('/api/workspace'");
+    expect(page).toContain('initializeDB(workspace.state, session.user)');
+    expect(page).toContain('return <ReferenceApp />');
+    expect(page).not.toContain('localStorage');
   });
 
-  it("configures MapLibre with local worker and RTL Arabic text plugin", () => {
-    const configSource = readFileSync(join(process.cwd(), "lib", "maplibre-config.ts"), "utf8");
-    const mapSource = readFileSync(join(process.cwd(), "components", "RealEstateMap.tsx"), "utf8");
-    const pickerSource = readFileSync(join(process.cwd(), "components", "LocationPicker.tsx"), "utf8");
-
-    expect(configSource).toContain("/maplibre-gl-csp-worker.js");
-    expect(configSource).toContain("/mapbox-gl-rtl-text.js");
-    expect(configSource).toContain("setRTLTextPlugin");
-    expect(configSource).toContain("getRTLTextPluginStatus");
-    expect(mapSource).toContain("configureMapLibre");
-    expect(pickerSource).toContain("configureMapLibre");
+  it('uses the reference desktop sidebar and mobile navigation', () => {
+    const layout = source('ui', 'components', 'Layout.tsx');
+    expect(layout).toContain('fixed top-0 right-0 h-screen w-64');
+    expect(layout).toContain("bg-[#0c1a36]");
+    expect(layout).toContain('md:mr-64 min-h-screen');
+    expect(layout).toContain('md:hidden fixed bottom-0');
+    expect(layout).toContain('إضافة سريعة');
   });
 
-  it("keeps AI and utility tools out of the primary sidebar navigation", () => {
-    const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
-    const navBlock = pageSource.slice(pageSource.indexOf("const navItems"), pageSource.indexOf("const profileSections"));
-
-    expect(navBlock).not.toContain('id: "ai"');
-    expect(navBlock).not.toContain('id: "calculator"');
-    expect(navBlock).not.toContain('id: "reminders"');
-    expect(navBlock).not.toContain('id: "notifications"');
-    expect(navBlock).not.toContain('id: "sharing"');
-    expect(navBlock).not.toContain('id: "trash"');
-    expect(navBlock).toContain('label: "الرئيسية"');
-    expect(navBlock).toContain('label: "حسابي"');
-    expect(pageSource).toContain('type ProfileSection = "settings" | "reminders" | "notifications" | "sharing" | "trash"');
-    expect(pageSource).not.toContain('label: "الدخول والتسجيل"');
-    expect(pageSource).toContain("تسجيل صوتي مباشر");
+  it('uses the full reference navigation modules', () => {
+    const layout = source('ui', 'components', 'Layout.tsx');
+    for (const label of ['الرئيسية', 'العروض', 'الطلبات', 'الخريطة', 'العملاء', 'حسابي']) {
+      expect(layout).toContain(label);
+    }
   });
 
-  it("gates the app behind login and keeps production UI free of demo/debug state", () => {
-    const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
-
-    expect(pageSource).toContain("return renderPublicAuthShell()");
-    expect(pageSource).toContain("سجل الدخول أولاً للوصول إلى بياناتك");
-    expect(pageSource).toContain('setWorkspace(seedState)');
-    expect(pageSource).not.toContain("window.localStorage");
-    expect(pageSource).not.toContain("wasit-mfkra-local-mvp-state");
-    expect(pageSource).not.toContain("أبو خالد");
-    expect(pageSource).not.toContain("شركة نجد");
-    expect(pageSource).not.toContain("سارة العتيبي");
-    expect(pageSource).not.toContain("SMTP جاهز");
-    expect(pageSource).not.toContain("متغيرات Supabase");
-    expect(pageSource).not.toContain("حالة قاعدة البيانات");
-    expect(pageSource).not.toContain("غير مدعو");
-    expect(pageSource).not.toContain("دعوات فقط");
-    expect(pageSource).toContain("مفتوح لأي مستخدم");
+  it('uses the complete reference dashboard', () => {
+    const dashboard = source('ui', 'pages', 'Dashboard.tsx');
+    expect(dashboard).toContain('إعلانات تجاوزت موعد تحديثها');
+    expect(dashboard).toContain('مراسلة لتحديث العقار');
+    expect(dashboard).toContain('سجل النشاط');
+    expect(dashboard).toContain('أحدث الإعلانات');
+    expect(dashboard).toContain('عمولة الشهر');
   });
 
-  it("protects AI server actions with authenticated requests", () => {
-    const extractSource = readFileSync(join(process.cwd(), "app", "api", "extract-property", "route.ts"), "utf8");
-    const transcribeSource = readFileSync(join(process.cwd(), "app", "api", "transcribe", "route.ts"), "utf8");
-    const authSource = readFileSync(join(process.cwd(), "lib", "app-auth.ts"), "utf8");
-
-    expect(extractSource).toContain("requireAuthenticatedRequest()");
-    expect(transcribeSource).toContain("requireAuthenticatedRequest()");
-    expect(authSource).toContain("app_sessions");
-    expect(authSource).toContain("wasit_session");
-    expect(authSource).toContain("سجل الدخول أولاً لاستخدام هذه الخدمة.");
+  it('uses the reference listings tabs, search, and cards', () => {
+    const listings = source('ui', 'pages', 'ListingsPage.tsx');
+    const card = source('ui', 'components', 'ListingCard.tsx');
+    expect(listings).toContain('allStatuses(kind)');
+    expect(listings).toContain('ابحث بالعنوان، الحي، المدينة');
+    expect(listings).toContain('<ListingCard');
+    expect(card).toContain('مراسلة لتحديث العقار');
+    expect(card).toContain('مشاركة');
   });
 
-  it("uses server PostgreSQL auth and workspace tables", () => {
-    const migrationSource = readFileSync(join(process.cwd(), "db", "migrations", "202608020001_server_auth.sql"), "utf8");
-    const accountFieldsMigration = readFileSync(join(process.cwd(), "db", "migrations", "202608020003_account_fields_and_otp.sql"), "utf8");
-    const migrateScript = readFileSync(join(process.cwd(), "scripts", "migrate.mjs"), "utf8");
-
-    expect(migrationSource).toContain("create table if not exists public.app_users");
-    expect(migrationSource).toContain("create table if not exists public.app_sessions");
-    expect(migrationSource).toContain("create table if not exists public.workspace_snapshots");
-    expect(accountFieldsMigration).toContain("fal_license");
-    expect(accountFieldsMigration).toContain("username");
-    expect(accountFieldsMigration).toContain("phone");
-    expect(migrationSource).not.toContain("auth.uid()");
-    expect(migrateScript).toContain("202608020001_server_auth.sql");
-    expect(migrateScript).toContain("202608020003_account_fields_and_otp.sql");
+  it('uses the reference details sheet, sharing, and archive dialogs', () => {
+    const details = source('ui', 'components', 'ListingDetails.tsx');
+    expect(details).toContain('<ShareDialog');
+    expect(details).toContain('<ArchiveDialog');
+    expect(details).toContain('سجل المشاركات');
+    expect(details).toContain('استعادة العقار نشط');
   });
 
-  it("implements public share snapshots with revocable /s token links", () => {
-    const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
-    const shareApiSource = readFileSync(join(process.cwd(), "app", "api", "shares", "route.ts"), "utf8");
-    const publicShareSource = readFileSync(join(process.cwd(), "app", "s", "[token]", "page.tsx"), "utf8");
-    const migrationSource = readFileSync(join(process.cwd(), "db", "migrations", "202608020002_share_snapshots.sql"), "utf8");
-    const migrateScript = readFileSync(join(process.cwd(), "scripts", "migrate.mjs"), "utf8");
-
-    expect(pageSource).toContain("إنشاء رابط عام");
-    expect(pageSource).toContain("بيانات الرابط العام");
-    expect(shareApiSource).toContain("share_snapshots");
-    expect(shareApiSource).toContain("/s/");
-    expect(publicShareSource).toContain("مشاركة عقارية من مفكرة الوسيط");
-    expect(migrationSource).toContain("create table if not exists public.share_snapshots");
-    expect(migrationSource).toContain("revoked_at");
-    expect(migrateScript).toContain("202608020002_share_snapshots.sql");
+  it('uses the reference three-mode quick add and review workflow', () => {
+    const quickAdd = source('ui', 'components', 'quick-add', 'QuickAddModal.tsx');
+    expect(quickAdd).toContain('إدخال يدوي');
+    expect(quickAdd).toContain('لصق واتساب');
+    expect(quickAdd).toContain('إدخال صوتي');
+    expect(quickAdd).toContain('مراجعة قبل الحفظ');
+    expect(quickAdd).toContain('db.addListing');
   });
 
-  it("lets brokers edit AI results, saved records, and share text options", () => {
-    const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
-    const extractRoute = readFileSync(join(process.cwd(), "app", "api", "extract-property", "route.ts"), "utf8");
-
-    expect(pageSource).toContain("updateAiResult");
-    expect(pageSource).toContain("راجع وعدّل البيانات قبل الحفظ");
-    expect(pageSource).toContain("updateRecordFromForm");
-    expect(pageSource).toContain("حفظ التعديل");
-    expect(pageSource).toContain("resetAiEntry()");
-    expect(pageSource).toContain("recordShareText(selectedShareRecord, publicShareOptions)");
-    expect(pageSource).toContain("updatePublicShareOptions");
-    expect(extractRoute).toContain("For short WhatsApp messages");
+  it('uses the reference dynamic property fields and mandatory map picker', () => {
+    const editor = source('ui', 'components', 'quick-add', 'DraftEditor.tsx');
+    expect(editor).toContain('TYPE_FIELDS[draft.propertyType]');
+    expect(editor).toContain('موقع العقار على الخريطة');
+    expect(editor).toContain('* إلزامي');
+    expect(editor).toContain('<MapPicker');
   });
 
-  it("implements the approved broker workspace layout and advanced quick entry", () => {
-    const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
-    const referenceDashboardSource = readFileSync(join(process.cwd(), "components", "reference-ui", "ReferenceDashboard.tsx"), "utf8");
-    const referenceShellSource = readFileSync(join(process.cwd(), "components", "reference-ui", "ReferenceShell.tsx"), "utf8");
-    const dashboardSource = `${pageSource}\n${referenceDashboardSource}\n${referenceShellSource}`;
-
-    expect(pageSource).toContain("ReferenceDashboard");
-    expect(pageSource).toContain("ReferenceShell");
-    expect(dashboardSource).toContain("إعلانات تجاوزت موعد تحديثها");
-    expect(dashboardSource).toContain("مراسلة لتحديث العقار");
-    expect(dashboardSource).toContain("سجل النشاط");
-    expect(dashboardSource).toContain("أحدث الإعلانات");
-    expect(dashboardSource).toContain("عمولة الشهر");
-    expect(pageSource).toContain("إدخال يدوي");
-    expect(pageSource).toContain("لصق واتساب");
-    expect(pageSource).toContain("إدخال صوتي");
-    expect(pageSource).toContain('name="askingPrice"');
-    expect(pageSource).toContain('name="basePriceMode"');
-    expect(pageSource).toContain('name="facades"');
-    expect(pageSource).toContain('name="planNumber"');
-    expect(pageSource).toContain('name="blockNumber"');
-    expect(pageSource).toContain('name="plotNumber"');
-    expect(pageSource).toContain('name="reminderDays"');
-    expect(pageSource).toContain("سجل المتابعة");
-    expect(pageSource).toContain("الأداء خلال 6 أشهر");
+  it('uses the reference Leaflet map and listing panel', () => {
+    const map = source('ui', 'pages', 'MapPage.tsx');
+    expect(map).toContain("import L from 'leaflet'");
+    expect(map).toContain('basemaps.cartocdn.com/dark_all');
+    expect(map).toContain('خريطة الإعلانات');
+    expect(map).toContain('قائمة الإعلانات');
   });
 
-  it("implements mobile bottom navigation, notification bell, details modal, and same-page share modal", () => {
-    const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
-    const referenceShellSource = readFileSync(join(process.cwd(), "components", "reference-ui", "ReferenceShell.tsx"), "utf8");
-    const shellAndPageSource = `${pageSource}\n${referenceShellSource}`;
-    const mapSource = readFileSync(join(process.cwd(), "components", "RealEstateMap.tsx"), "utf8");
-
-    expect(shellAndPageSource).toContain('aria-label="التنقل الرئيسي للجوال"');
-    expect(shellAndPageSource).toContain("pb-safe");
-    expect(shellAndPageSource).toContain("border-t border-slate-700/40 p-4");
-    expect(shellAndPageSource).toContain("إضافة سريعة");
-    expect(pageSource).not.toContain('aria-label="الإشعارات"');
-    expect(pageSource).toContain("renderRecordDetailsModal");
-    expect(pageSource).toContain("setShareModalOpen(true)");
-    expect(pageSource).toContain("مشاركة من نفس الصفحة");
-    expect(mapSource).toContain("onOpenDetails(properties.id)");
+  it('uses the reference contacts and account pages', () => {
+    const contacts = source('ui', 'pages', 'ContactsPage.tsx');
+    const account = source('ui', 'pages', 'AccountPage.tsx');
+    expect(contacts).toContain('السجل الزمني للمشاركات');
+    expect(contacts).toContain('مراسلة واتساب');
+    expect(account).toContain('الإحصائيات المالية');
+    expect(account).toContain('رخصة فال');
   });
 
-  it("keeps property images behind authenticated API routes and out of base64 database fields", () => {
-    const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
-    const imageApi = readFileSync(join(process.cwd(), "app", "api", "property-images", "route.ts"), "utf8");
-    const imageGetApi = readFileSync(join(process.cwd(), "app", "api", "property-images", "[id]", "route.ts"), "utf8");
-
-    expect(pageSource).toContain("quickImages");
-    expect(pageSource).toContain("/api/property-images");
-    expect(imageApi).toContain("requireAuthenticatedRequest()");
-    expect(imageApi).toContain("5 * 1024 * 1024");
-    expect(imageGetApi).toContain("startsWith(`${user.id}_`)");
-    expect(pageSource).not.toContain("readAsDataURL");
+  it('persists reference mutations through the authenticated backend workspace', () => {
+    const adapter = source('ui', 'lib', 'db.ts');
+    expect(adapter).toContain("fetch('/api/workspace'");
+    expect(adapter).toContain("method: 'PUT'");
+    expect(adapter).toContain('records: state.listings.map');
+    expect(adapter).not.toContain('localStorage');
   });
 
-  it("supports OTP email activation and password recovery UI", () => {
-    const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
-    const registerRoute = readFileSync(join(process.cwd(), "app", "api", "auth", "register", "route.ts"), "utf8");
-    const confirmRoute = readFileSync(join(process.cwd(), "app", "api", "auth", "confirm-email", "route.ts"), "utf8");
-    const resetRoute = readFileSync(join(process.cwd(), "app", "api", "auth", "reset-password", "route.ts"), "utf8");
-
-    expect(pageSource).toContain("رقم الجوال");
-    expect(pageSource).toContain("رقم رخصة فال");
-    expect(pageSource).toContain("تأكيد كلمة المرور");
-    expect(pageSource).not.toContain("اسم مستخدم اختياري");
-    expect(registerRoute).toContain("const username = phone");
-    expect(pageSource).toContain("رمز OTP");
-    expect(pageSource).toContain("استعادة كلمة المرور");
-    expect(confirmRoute).toContain("email_confirm");
-    expect(resetRoute).toContain("password_reset");
+  it('keeps AI and image server actions authenticated', () => {
+    const extract = source('app', 'api', 'extract-property', 'route.ts');
+    const transcribe = source('app', 'api', 'transcribe', 'route.ts');
+    const images = source('app', 'api', 'property-images', 'route.ts');
+    expect(extract).toContain('requireAuthenticatedRequest()');
+    expect(transcribe).toContain('requireAuthenticatedRequest()');
+    expect(images).toContain('requireAuthenticatedRequest()');
   });
 
-  it("saves permitted profile fields through an authenticated server route", () => {
-    const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
-    const profileRoute = readFileSync(join(process.cwd(), "app", "api", "auth", "profile", "route.ts"), "utf8");
-
-    expect(pageSource).toContain("/api/auth/profile");
-    expect(pageSource).toContain('name="falLicense"');
-    expect(profileRoute).toContain("requireAuthenticatedRequest()");
-    expect(profileRoute).toContain("set name = $2, fal_license = $3, timezone = $4");
-    expect(profileRoute).not.toContain("phone =");
-    expect(profileRoute).not.toContain("email =");
+  it('supports production OTP authentication and protected profile updates', () => {
+    const page = source('app', 'page.tsx');
+    const profile = source('app', 'api', 'auth', 'profile', 'route.ts');
+    expect(page).toContain('رمز OTP');
+    expect(page).toContain('استعادة كلمة المرور');
+    expect(page).toContain('رخصة فال');
+    expect(profile).toContain('requireAuthenticatedRequest()');
+    expect(profile).not.toContain('phone =');
+    expect(profile).not.toContain('email =');
   });
 });

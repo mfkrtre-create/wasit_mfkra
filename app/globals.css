@@ -1,46 +1,68 @@
 @import "tailwindcss";
-@import "maplibre-gl/dist/maplibre-gl.css";
+@import "leaflet/dist/leaflet.css";
 
 :root {
-  color-scheme: dark;
-  --background: #071224;
-  --foreground: #f8fafc;
-  --card: #0f1f3d;
-  --card-soft: #12234a;
-  --secondary: #172641;
-  --muted: #aebbd1;
-  --muted-strong: #d9e3f3;
-  --border: rgba(148, 163, 184, 0.24);
-  --border-gold: rgba(201, 151, 47, 0.36);
-  --gold: #c9972f;
-  --gold-light: #e5bc55;
-  --danger: #ef4444;
+  --background: 222 61% 9%;
+  --foreground: 45 30% 96%;
+  --card: 221 55% 13%;
+  --card-foreground: 45 30% 96%;
+  --popover: 221 55% 12%;
+  --popover-foreground: 45 30% 96%;
+  --primary: 39 62% 49%;
+  --primary-foreground: 222 61% 10%;
+  --secondary: 220 45% 18%;
+  --secondary-foreground: 45 30% 94%;
+  --muted: 220 40% 20%;
+  --muted-foreground: 220 18% 68%;
+  --accent: 220 45% 20%;
+  --accent-foreground: 45 40% 95%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 220 35% 24%;
+  --input: 220 35% 26%;
+  --ring: 39 62% 49%;
+  --radius: 0.75rem;
+}
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
 }
 
 * {
   box-sizing: border-box;
-  border-color: var(--border);
+  border-color: hsl(var(--border));
 }
 
 html {
   direction: rtl;
-  font-family: "Cairo", Tahoma, "Segoe UI", Arial, sans-serif;
+  font-family: "Cairo", Tahoma, "Segoe UI", sans-serif;
 }
 
 body {
   min-height: 100vh;
   margin: 0;
-  background:
-    radial-gradient(circle at top right, rgba(201, 151, 47, 0.13), transparent 28rem),
-    linear-gradient(135deg, #06101f 0%, #071224 45%, #0a1730 100%);
-  color: var(--foreground);
-  font-family: "Cairo", Tahoma, "Segoe UI", Arial, sans-serif;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: "Cairo", Tahoma, "Segoe UI", sans-serif;
   -webkit-tap-highlight-color: transparent;
-}
-
-::selection {
-  background: rgba(201, 151, 47, 0.35);
-  color: #fff;
 }
 
 button,
@@ -71,9 +93,7 @@ input[type="number"],
 }
 
 .card-glow {
-  box-shadow:
-    inset 0 1px 0 rgba(201, 151, 47, 0.12),
-    0 8px 24px -12px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 1px 0 0 rgba(201, 151, 47, 0.12) inset, 0 8px 24px -12px rgba(0, 0, 0, 0.55);
 }
 
 .scrollbar-thin::-webkit-scrollbar {
@@ -86,220 +106,62 @@ input[type="number"],
   border-radius: 999px;
 }
 
+.leaflet-popup-content-wrapper {
+  background: #12234a !important;
+  color: #f3ecdd !important;
+  border: 1px solid rgba(201, 151, 47, 0.35);
+  border-radius: 12px;
+  direction: rtl;
+  font-family: "Cairo", Tahoma, sans-serif;
+}
+
+.leaflet-popup-tip {
+  background: #12234a !important;
+  border: 1px solid rgba(201, 151, 47, 0.35);
+}
+
+.leaflet-popup-content {
+  margin: 10px 14px !important;
+}
+
+.leaflet-container {
+  background: #0a1730;
+  font-family: "Cairo", Tahoma, sans-serif;
+}
+
+.leaflet-bar a {
+  background: #12234a !important;
+  color: #e5bc55 !important;
+  border-color: rgba(201, 151, 47, 0.3) !important;
+}
+
+.map-pin {
+  display: flex;
+  width: 30px;
+  height: 30px;
+  transform: rotate(-45deg);
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-radius: 50% 50% 50% 0;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5);
+}
+
+.map-pin span {
+  transform: rotate(45deg);
+  font-size: 13px;
+  line-height: 1;
+}
+
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.animate-sheet-up {
+  animation: sheet-up 0.25s ease-out;
+}
+
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-.primary-button,
-.secondary-button,
-.action-button,
-.danger-button {
-  display: inline-flex;
-  min-height: 2.5rem;
-  align-items: center;
-  gap: 0.5rem;
-  border-radius: 0.75rem;
-  padding: 0.55rem 0.9rem;
-  font-size: 0.875rem;
-  font-weight: 800;
-  line-height: 1.25rem;
-  transition:
-    transform 150ms ease,
-    background-color 150ms ease,
-    border-color 150ms ease,
-    color 150ms ease,
-    box-shadow 150ms ease,
-    filter 150ms ease;
-}
-
-.primary-button:hover,
-.secondary-button:hover,
-.action-button:hover,
-.danger-button:hover {
-  transform: translateY(-1px);
-}
-
-.primary-button {
-  border: 1px solid transparent;
-  background: linear-gradient(135deg, #c9972f 0%, #e5bc55 50%, #c9972f 100%);
-  color: #0f1f3d;
-  box-shadow: 0 14px 30px rgba(201, 151, 47, 0.22);
-}
-
-.primary-button:hover {
-  filter: brightness(1.08);
-}
-
-.secondary-button,
-.action-button {
-  border: 1px solid var(--border);
-  background: rgba(23, 38, 65, 0.72);
-  color: #dce6f6;
-}
-
-.secondary-button:hover,
-.action-button:hover {
-  border-color: var(--border-gold);
-  background: rgba(23, 38, 65, 0.95);
-  color: #fff;
-}
-
-.danger-button {
-  border: 1px solid rgba(239, 68, 68, 0.34);
-  background: rgba(127, 29, 29, 0.24);
-  color: #fecaca;
-}
-
-.danger-button:hover {
-  background: rgba(153, 27, 27, 0.36);
-  color: #fee2e2;
-}
-
-input,
-select,
-textarea {
-  border-color: var(--border) !important;
-  background: rgba(10, 23, 48, 0.74) !important;
-  color: #fff !important;
-}
-
-input::placeholder,
-textarea::placeholder {
-  color: rgba(174, 187, 209, 0.72) !important;
-}
-
-option {
-  background: #0f1f3d;
-  color: #fff;
-}
-
-.maplibregl-map {
-  background: #0a1730;
-  font-family: "Cairo", Tahoma, "Segoe UI", Arial, sans-serif;
-}
-
-.maplibregl-popup-content {
-  border: 1px solid var(--border-gold);
-  border-radius: 0.75rem;
-  background: #12234a;
-  color: #f3ecdd;
-  direction: rtl;
-  padding: 0;
-  text-align: right;
-  box-shadow: 0 18px 50px rgba(2, 6, 23, 0.4);
-}
-
-.maplibregl-popup-tip {
-  border-top-color: #12234a !important;
-  border-bottom-color: #12234a !important;
-}
-
-.map-popup {
-  display: grid;
-  gap: 0.55rem;
-  min-width: 250px;
-  padding: 0.85rem;
-}
-
-.map-popup__image {
-  height: 7rem;
-  width: 100%;
-  border-radius: 0.5rem;
-  object-fit: cover;
-}
-
-.map-popup__title {
-  color: #fff;
-  font-weight: 900;
-}
-
-.map-popup__body {
-  color: var(--muted-strong);
-  font-size: 0.85rem;
-  line-height: 1.7;
-}
-
-.map-popup__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.map-popup__button {
-  border-radius: 0.75rem;
-  background: var(--gold-light);
-  color: #0f1f3d;
-  font-size: 0.8rem;
-  font-weight: 800;
-  padding: 0.45rem 0.65rem;
-  text-decoration: none;
-}
-
-.map-popup__button--light {
-  background: rgba(148, 163, 184, 0.16);
-  color: #f8fafc;
-}
-
-/* Compatibility layer for retained real features while the reference shell owns the UI. */
-.bg-slate-100,
-.bg-slate-50,
-.bg-white,
-.bg-white\/95 {
-  background-color: rgba(15, 31, 61, 0.96) !important;
-}
-
-.bg-teal-50,
-.bg-blue-50,
-.bg-amber-50 {
-  background-color: rgba(201, 151, 47, 0.1) !important;
-}
-
-.bg-rose-50 {
-  background-color: rgba(127, 29, 29, 0.24) !important;
-}
-
-.bg-slate-200 {
-  background-color: rgba(148, 163, 184, 0.16) !important;
-}
-
-.border-slate-100,
-.border-slate-200,
-.border-slate-300,
-.border-teal-100,
-.border-teal-200,
-.border-blue-200,
-.border-amber-200,
-.border-rose-200 {
-  border-color: var(--border) !important;
-}
-
-.text-slate-950,
-.text-slate-900,
-.text-slate-800,
-.text-blue-950,
-.text-blue-900,
-.text-teal-950,
-.text-teal-900,
-.text-amber-950 {
-  color: #f8fafc !important;
-}
-
-.text-slate-700,
-.text-slate-600,
-.text-blue-800,
-.text-teal-800,
-.text-amber-800 {
-  color: var(--muted-strong) !important;
-}
-
-.text-slate-500,
-.text-teal-700,
-.text-rose-800 {
-  color: var(--muted) !important;
-}
-
-.shadow-sm {
-  box-shadow:
-    inset 0 1px 0 rgba(201, 151, 47, 0.12),
-    0 8px 24px -12px rgba(0, 0, 0, 0.55) !important;
 }
