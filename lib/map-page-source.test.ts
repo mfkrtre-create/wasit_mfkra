@@ -122,12 +122,15 @@ describe("map page source", () => {
 
   it("implements the approved broker workspace layout and advanced quick entry", () => {
     const pageSource = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf8");
+    const referenceDashboardSource = readFileSync(join(process.cwd(), "components", "reference-ui", "ReferenceDashboard.tsx"), "utf8");
+    const dashboardSource = `${pageSource}\n${referenceDashboardSource}`;
 
-    expect(pageSource).toContain("إعلانات تجاوزت موعد تحديثها");
-    expect(pageSource).toContain("مراسلة لتحديث العقار");
-    expect(pageSource).toContain("سجل النشاط");
-    expect(pageSource).toContain("أحدث الإعلانات");
-    expect(pageSource).toContain("عمولة الشهر");
+    expect(pageSource).toContain("ReferenceDashboard");
+    expect(dashboardSource).toContain("إعلانات تجاوزت موعد تحديثها");
+    expect(dashboardSource).toContain("مراسلة لتحديث العقار");
+    expect(dashboardSource).toContain("سجل النشاط");
+    expect(dashboardSource).toContain("أحدث الإعلانات");
+    expect(dashboardSource).toContain("عمولة الشهر");
     expect(pageSource).toContain("إدخال يدوي");
     expect(pageSource).toContain("لصق واتساب");
     expect(pageSource).toContain("إدخال صوتي");

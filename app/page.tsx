@@ -2,14 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity as ActivityIcon,
   Bell,
   Building2,
   Calculator,
   CalendarClock,
   Camera,
   CheckCircle2,
-  CircleDollarSign,
   ClipboardCopy,
   Eye,
   History,
@@ -39,6 +37,7 @@ import {
 } from "lucide-react";
 import { LocationPicker } from "@/components/LocationPicker";
 import { RealEstateMap } from "@/components/RealEstateMap";
+import { ReferenceDashboard, referenceDashboardIcons } from "@/components/reference-ui/ReferenceDashboard";
 import { filterMapRecords, type MapRecord } from "@/lib/map-records";
 import { formatArea, parseOptionalPositiveDecimal, parseOptionalPositiveInteger } from "@/lib/number-utils";
 import { type PropertyData } from "@/lib/property-schema";
@@ -1924,19 +1923,13 @@ export default function Home() {
     const totalCommission = 0;
     const tier = brokerTierLabel(workspace.profile, authUser);
     const falLicense = authUser?.falLicense || workspace.records.find((record) => record.falLicense)?.falLicense || "غير مضاف";
+    const formatReferenceMoney = (value: number | null | undefined) => (value === null || value === undefined ? "—" : `${value.toLocaleString("en-US")} ر.س`);
     const kpis = [
-      { label: "عروض نشطة", value: openOffers.length, tone: "teal" as const, icon: Tag, view: "offers" as ViewId },
-      { label: "طلبات نشطة", value: openRequests.length, tone: "blue" as const, icon: Inbox, view: "requests" as ViewId },
-      { label: "تحتاج تحديث", value: overdueRecords.length, tone: "red" as const, icon: CalendarClock, view: "dashboard" as ViewId },
-      { label: "عمولة الشهر", value: formatMoney(monthCommission), tone: "gold" as const, icon: CircleDollarSign, view: "admin" as ViewId },
+      { label: "عروض نشطة", value: openOffers.length, tone: "emerald" as const, icon: referenceDashboardIcons.Tag, onClick: () => setView("offers") },
+      { label: "طلبات نشطة", value: openRequests.length, tone: "violet" as const, icon: referenceDashboardIcons.Inbox, onClick: () => setView("requests") },
+      { label: "تحتاج تحديث", value: overdueRecords.length, tone: "red" as const, icon: referenceDashboardIcons.CalendarClock, onClick: () => setView("dashboard") },
+      { label: "عمولة الشهر", value: formatReferenceMoney(monthCommission), tone: "gold" as const, icon: referenceDashboardIcons.CircleDollarSign, onClick: () => setView("admin") },
     ];
-    const activityIcon: Record<ActivityEvent["type"], string> = {
-      record_created: "+",
-      record_updated: "✓",
-      share_sent: "↗",
-      reminder_created: "!",
-      client_created: "👤",
-    };
 
     function markRecordFresh(record: PropertyRecord) {
       const refreshedAt = nowIso();
@@ -1978,169 +1971,43 @@ export default function Home() {
     }
 
     return (
-      <div className="mx-auto max-w-6xl space-y-6 px-4 py-5 md:py-8">
-        <header className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-bold text-[#c9972f]">{greetingLabel()}</p>
-            <h1 className="mt-0.5 text-2xl font-extrabold text-white md:text-3xl">{workspace.profile.name}</h1>
-            <p className="mt-1 text-sm text-slate-400">
-              {tier} • رخصة فال {falLicense}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              setQuickKind("offer");
-              setQuickEntryMode("manual");
-              setQuickAddOpen(true);
-            }}
-            className="hidden items-center gap-2 rounded-xl px-5 py-3 font-extrabold text-[#0f1f3d] shadow-lg transition-all hover:brightness-110 active:scale-[0.98] sm:flex gold-gradient"
-          >
-            <Plus className="size-5" strokeWidth={3} aria-hidden="true" />
-            إضافة سريعة
-          </button>
-        </header>
-
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {kpis.map(({ label, value, icon: Icon, tone, view: targetView }) => {
-            const toneClass =
-              tone === "teal"
-                ? "border-emerald-500/25 text-emerald-300 bg-emerald-500/10"
-                : tone === "blue"
-                  ? "border-violet-500/25 text-violet-300 bg-violet-500/10"
-                  : tone === "red"
-                    ? "border-red-500/25 text-red-300 bg-red-500/10"
-                    : "border-[#c9972f]/25 text-[#e5bc55] bg-[#c9972f]/10";
-            return (
-              <button
-                key={label}
-                type="button"
-                onClick={() => setView(targetView)}
-                className="rounded-2xl border border-slate-700/50 bg-[#0f1f3d] p-4 text-start transition hover:-translate-y-0.5 hover:border-[#c9972f]/40 card-glow"
-              >
-                <div className={`mb-3 flex size-10 items-center justify-center rounded-xl border ${toneClass}`}>
-                  <Icon className="size-5" aria-hidden="true" />
-                </div>
-                <p className="text-xl font-extrabold text-white nums-latin md:text-2xl">{value}</p>
-                <p className="mt-0.5 text-xs font-semibold text-slate-400">{label}</p>
-              </button>
-            );
-          })}
-        </div>
-
-        {overdueRecords.length > 0 ? (
-          <section className="rounded-2xl border border-red-500/30 bg-red-500/5 p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="flex items-center gap-2 font-extrabold text-red-300">
-                <CalendarClock className="size-5" aria-hidden="true" />
-                إعلانات تجاوزت موعد تحديثها ({overdueRecords.length})
-              </h2>
-            </div>
-            <div className="space-y-2">
-              {overdueRecords.slice(0, 6).map((record) => (
-                <div key={record.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-red-500/20 bg-[#0f1f3d] px-3.5 py-2.5">
-                  <span className="min-w-40 flex-1 truncate text-sm font-bold text-white">{record.title}</span>
-                  <span className="text-[11px] text-slate-400">{record.ownerName || record.contact || "غير محدد"}</span>
-                  <div className="ms-auto flex gap-1.5">
-                    <button
-                      type="button"
-                      disabled={!record.ownerPhone && !record.contact}
-                      onClick={() => openUpdateMessage(record)}
-                      className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-bold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      مراسلة لتحديث العقار
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => markRecordFresh(record)}
-                      className="rounded-lg border border-slate-700/60 bg-[#172641]/70 px-2.5 py-1.5 text-[11px] font-bold text-slate-200 transition hover:border-emerald-500/40"
-                    >
-                      تم التحديث
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {[
-            { label: "إضافة عرض", icon: "🏷️", action: () => { setQuickKind("offer"); setQuickEntryMode("manual"); setQuickAddOpen(true); } },
-            { label: "إضافة طلب", icon: "📥", action: () => { setQuickKind("request"); setQuickEntryMode("manual"); setQuickAddOpen(true); } },
-            { label: "الخريطة", icon: "🗺️", action: () => setView("map") },
-            { label: "الإحصائيات", icon: "📊", action: () => { setProfileSection("sharing"); setView("admin"); } },
-          ].map((action) => (
-            <button
-              key={action.label}
-              type="button"
-              onClick={action.action}
-              className="rounded-2xl border border-slate-700/50 bg-[#0f1f3d] p-4 text-center transition hover:-translate-y-0.5 hover:border-[#c9972f]/40 card-glow"
-            >
-              <span className="text-2xl">{action.icon}</span>
-              <p className="mt-1.5 text-sm font-bold text-slate-200">{action.label}</p>
-            </button>
-          ))}
-        </section>
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          <section>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="flex items-center gap-2 font-extrabold text-white">
-                <ActivityIcon className="size-5 text-[#c9972f]" aria-hidden="true" />
-                أحدث الإعلانات
-              </h2>
-              <button type="button" onClick={() => setView("offers")} className="flex items-center gap-1 text-xs font-bold text-[#e5bc55] hover:underline">
-                عرض الكل
-              </button>
-            </div>
-            <div className="space-y-3">
-              {activeRecords.length > 0 ? (
-                activeRecords.slice(0, 3).map(renderRecordCard)
-              ) : (
-                <p className="py-8 text-center text-sm text-slate-400">لا توجد إعلانات بعد - أضف أول إعلان</p>
-              )}
-            </div>
-          </section>
-
-          <section>
-            <h2 className="mb-3 flex items-center gap-2 font-extrabold text-white">
-              <History className="size-5 text-[#c9972f]" aria-hidden="true" />
-              سجل النشاط
-            </h2>
-            <div className="max-h-[520px] overflow-y-auto rounded-2xl border border-slate-700/50 bg-[#0f1f3d] divide-y divide-slate-700/50 scrollbar-thin card-glow">
-              {workspace.activities.length > 0 ? (
-                workspace.activities.slice(0, 20).map((activity) => (
-                  <div key={activity.id} className="flex items-start gap-3 px-4 py-3">
-                    <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-lg border border-[#c9972f]/25 bg-[#c9972f]/10 text-xs font-bold text-[#e5bc55]">
-                      {activityIcon[activity.type] ?? "•"}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold leading-snug text-slate-100">{activity.title}</p>
-                      {activity.details ? <p className="mt-0.5 truncate text-[11px] text-[#e5bc55]/80">{activity.details}</p> : null}
-                      <p className="mt-0.5 text-[10px] text-slate-500">{timeAgo(activity.createdAt)}</p>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="py-8 text-center text-sm text-slate-400">لا يوجد نشاط بعد</p>
-              )}
-            </div>
-          </section>
-        </div>
-
-        {totalCommission > 0 ? (
-          <section className="flex items-center justify-between rounded-2xl border border-[#c9972f]/30 p-4 navy-gradient">
-            <div>
-              <p className="text-xs font-semibold text-slate-400">إجمالي العمولات المحققة</p>
-              <p className="mt-0.5 text-2xl font-extrabold text-[#e5bc55] nums-latin">{formatMoney(totalCommission)}</p>
-            </div>
-            <button type="button" onClick={() => setView("admin")} className="text-xs font-bold text-[#e5bc55] hover:underline">
-              التفاصيل المالية
-            </button>
-          </section>
-        ) : null}
-      </div>
+      <ReferenceDashboard
+        greeting={greetingLabel()}
+        profileName={workspace.profile.name}
+        tier={tier}
+        falLicense={falLicense}
+        kpis={kpis}
+        overdue={overdueRecords.slice(0, 6).map((record) => ({
+          id: record.id,
+          title: record.title,
+          contactName: record.ownerName || record.contact || "غير محدد",
+          canMessage: Boolean(record.ownerPhone || record.contact),
+          onMessage: () => openUpdateMessage(record),
+          onRefresh: () => markRecordFresh(record),
+        }))}
+        quickActions={[
+          { label: "إضافة عرض", icon: "🏷️", onClick: () => { setQuickKind("offer"); setQuickEntryMode("manual"); setQuickAddOpen(true); } },
+          { label: "إضافة طلب", icon: "📥", onClick: () => { setQuickKind("request"); setQuickEntryMode("manual"); setQuickAddOpen(true); } },
+          { label: "الخريطة", icon: "🗺️", onClick: () => setView("map") },
+          { label: "الإحصائيات", icon: "📊", onClick: () => { setProfileSection("sharing"); setView("admin"); } },
+        ]}
+        latestRecords={activeRecords.slice(0, 3).map((record) => <div key={record.id}>{renderRecordCard(record)}</div>)}
+        activities={workspace.activities.slice(0, 20).map((activity) => ({
+          id: activity.id,
+          icon: activity.type === "record_created" ? "+" : activity.type === "record_updated" ? "✓" : activity.type === "share_sent" ? "↗" : activity.type === "client_created" ? "👤" : "!",
+          title: activity.title,
+          detail: activity.details,
+          time: timeAgo(activity.createdAt),
+        }))}
+        totalCommission={totalCommission > 0 ? formatReferenceMoney(totalCommission) : null}
+        onQuickAdd={() => {
+          setQuickKind("offer");
+          setQuickEntryMode("manual");
+          setQuickAddOpen(true);
+        }}
+        onViewOffers={() => setView("offers")}
+        onViewAccount={() => setView("admin")}
+      />
     );
   }
 
