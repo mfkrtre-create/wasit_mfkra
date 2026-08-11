@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Crosshair, Loader2, Search } from 'lucide-react';
 import { configureMapLibre } from '@/lib/maplibre-config';
+import { rasterMapStyle } from '@/lib/map-style';
 
 export interface LatLng { lat: number; lng: number }
 
 const RIYADH: LatLng = { lat: 24.7136, lng: 46.6753 };
-const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 
 export function MapPicker({ value, onChange, onDistrictFound, height = 260 }: { value: LatLng | null; onChange: (value: LatLng) => void; onDistrictFound?: (district: string) => void; height?: number }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -38,7 +38,7 @@ export function MapPicker({ value, onChange, onDistrictFound, height = 260 }: { 
       const maplibregl = await import('maplibre-gl');
       await configureMapLibre(maplibregl);
       if (cancelled || !containerRef.current) return;
-      const map = new maplibregl.Map({ container: containerRef.current, style: STYLE_URL, center: [value?.lng ?? RIYADH.lng, value?.lat ?? RIYADH.lat], zoom: value ? 15 : 11, attributionControl: { compact: true } });
+      const map = new maplibregl.Map({ container: containerRef.current, style: rasterMapStyle, center: [value?.lng ?? RIYADH.lng, value?.lat ?? RIYADH.lat], zoom: value ? 15 : 11, attributionControl: { compact: true } });
       map.addControl(new maplibregl.NavigationControl(), 'bottom-left');
       map.on('click', (event) => {
         const point = { lat: event.lngLat.lat, lng: event.lngLat.lng };

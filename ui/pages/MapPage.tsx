@@ -6,9 +6,9 @@ import { useDB } from '@/ui/lib/db';
 import { useApp } from '@/ui/context/AppContext';
 import { fmtMoney } from '@/ui/lib/format';
 import { configureMapLibre } from '@/lib/maplibre-config';
+import { rasterMapStyle } from '@/lib/map-style';
 import { cn } from '@/ui/lib/utils';
 
-const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 const TYPE_EMOJI: Record<string, string> = { land: '🗺️', villa: '🏡', apartment: '🏢', building: '🏬', block: '🧱', warehouse: '🏭', rest_house: '🏝️', office: '🏢', shop: '🏪', farm: '🌴', tower: '🏙️', other: '📍' };
 type Filter = 'all' | 'offer' | 'request';
 
@@ -47,9 +47,11 @@ export function MapPage() {
       const maplibregl = await import('maplibre-gl');
       await configureMapLibre(maplibregl);
       if (cancelled || !containerRef.current) return;
-      const map = new maplibregl.Map({ container: containerRef.current, style: STYLE_URL, center: [46.6753, 24.7136], zoom: 10.5, attributionControl: { compact: true } });
+      const map = new maplibregl.Map({ container: containerRef.current, style: rasterMapStyle, center: [46.6753, 24.7136], zoom: 10.5, attributionControl: { compact: true } });
       map.addControl(new maplibregl.NavigationControl(), 'bottom-left');
-      map.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true } }), 'bottom-left');
+      if (window.isSecureContext && navigator.geolocation) {
+        map.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true } }), 'bottom-left');
+      }
       mapRef.current = map;
       setMapReady(true);
     })();

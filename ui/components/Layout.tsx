@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
-import { Bell, Home, Tag, Inbox, Map as MapIcon, Users, UserCircle, Plus, Building2, ShieldCheck, FileText } from 'lucide-react';
+import { Bell, Home, Tag, Inbox, Map as MapIcon, Users, UserCircle, Plus, Building2, ShieldCheck } from 'lucide-react';
 import { useApp } from '@/ui/context/AppContext';
 import { useDB } from '@/ui/lib/db';
 import { isOverdue } from '@/ui/lib/db';
@@ -15,7 +15,6 @@ const NAV_ITEMS = [
   { to: '/requests', label: 'الطلبات', icon: Inbox },
   { to: '/map', label: 'الخريطة', icon: MapIcon },
   { to: '/contacts', label: 'العملاء', icon: Users },
-  { to: '/documents', label: 'documents', icon: FileText },
   { to: '/account', label: 'حسابي', icon: UserCircle },
 ];
 
@@ -108,7 +107,7 @@ export function Layout() {
 
       {/* ===== Mobile: bottom navigation ===== */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#0c1a36]/95 backdrop-blur-lg border-t border-border pb-safe">
-        <div className="grid grid-cols-7 h-16">
+        <div className="grid grid-cols-6 h-16">
           {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
@@ -116,7 +115,7 @@ export function Layout() {
               end={to === '/'}
               className={({ isActive }) =>
                 cn(
-                  'flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors relative',
+                  'flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold transition-colors relative',
                   isActive ? 'text-[#e5bc55]' : 'text-muted-foreground',
                 )
               }

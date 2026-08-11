@@ -78,10 +78,15 @@ describe('reference frontend integration', () => {
     expect(editor).toContain('<MapPicker');
   });
 
-  it('uses the reference MapLibre OpenFreeMap map and listing panel', () => {
+  it('uses the reference MapLibre raster map and listing panel', () => {
     const map = source('ui', 'pages', 'MapPage.tsx');
+    const picker = source('ui', 'components', 'MapPicker.tsx');
+    const style = source('lib', 'map-style.ts');
     expect(map).toContain("import('maplibre-gl')");
-    expect(map).toContain('tiles.openfreemap.org/styles/liberty');
+    expect(map).toContain('rasterMapStyle');
+    expect(map).toContain('window.isSecureContext');
+    expect(picker).toContain('rasterMapStyle');
+    expect(style).toContain('basemaps.cartocdn.com/dark_all');
     expect(map).toContain('خريطة الإعلانات');
     expect(map).toContain('قائمة الإعلانات');
   });
@@ -104,21 +109,17 @@ describe('reference frontend integration', () => {
     expect(adapter).not.toContain('localStorage');
   });
 
-  it('exposes authenticated project documents in the reference UI', () => {
+  it('keeps project requirement documents out of the product UI', () => {
     const app = source('ui', 'App.tsx');
     const layout = source('ui', 'components', 'Layout.tsx');
     const shareDialog = source('ui', 'components', 'ShareDialog.tsx');
-    const documentsPage = source('ui', 'pages', 'DocumentsPage.tsx');
-    const documentsApi = source('app', 'api', 'documents', 'route.ts');
-    expect(app).toContain('DocumentsPage');
-    expect(layout).toContain('/documents');
-    expect(documentsPage).toContain("fetch('/api/documents'");
-    expect(documentsApi).toContain('requireAuthenticatedRequest()');
+    expect(app).not.toContain('DocumentsPage');
+    expect(layout).not.toContain('/documents');
     expect(shareDialog).toContain('createPublicShare');
     expect(shareDialog).toContain('revokePublicShare');
     expect(existsSync(join(process.cwd(), 'documents'))).toBe(true);
-    expect(existsSync(join(process.cwd(), 'ui', 'pages', 'DocumentsPage.tsx'))).toBe(true);
-    expect(existsSync(join(process.cwd(), 'app', 'api', 'documents', 'route.ts'))).toBe(true);
+    expect(existsSync(join(process.cwd(), 'ui', 'pages', 'DocumentsPage.tsx'))).toBe(false);
+    expect(existsSync(join(process.cwd(), 'app', 'api', 'documents', 'route.ts'))).toBe(false);
   });
 
   it('keeps AI and image server actions authenticated', () => {

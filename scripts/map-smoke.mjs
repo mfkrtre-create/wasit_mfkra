@@ -131,7 +131,7 @@ function summarizeEvents(events) {
     }
     if (event.method === "Network.responseReceived") {
       const { url, status, mimeType } = event.params.response;
-      if (/openfreemap|maplibre|mapbox-gl-rtl-text|\.pbf|sprite|glyph|env-status/.test(url)) {
+      if (/basemaps\.cartocdn|maplibre|mapbox-gl-rtl-text|\.png|env-status/.test(url)) {
         watchedResponses.push({ url, status, mimeType });
       }
     }
@@ -206,7 +206,7 @@ async function runScenario(send, mobile = false) {
         loadingVisible: body.includes('جاري تحميل الخريطة الحقيقية'),
         timeoutVisible: body.includes('طال تحميل الخريطة'),
         errorVisible: body.includes('تعذر تحميل الخريطة') || body.includes('حدث خطأ أثناء تحميل الخريطة'),
-        attributionVisible: attribution.includes('OpenFreeMap') || attribution.includes('OpenStreetMap'),
+        attributionVisible: attribution.includes('CARTO') || attribution.includes('OpenStreetMap'),
         rtlStatus,
         rect: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null
       };
@@ -274,7 +274,7 @@ try {
 
   const hasRtlPlugin = summary.watchedResponses.some((response) => response.url.includes("mapbox-gl-rtl-text") && response.status === 200);
   const rtlConfigured = [desktop, mobile].every((scenario) => ["loaded", "loading", "deferred"].includes(scenario.beforeInteraction.rtlStatus));
-  const hasOpenFreeMap = summary.watchedResponses.some((response) => response.url.includes("openfreemap") && response.status === 200);
+  const hasRasterTiles = summary.watchedResponses.some((response) => response.url.includes("basemaps.cartocdn.com") && response.status === 200);
   const hasFailure = summary.failedRequests.length > 0;
   const visibleAndUsable = [desktop, mobile].every(
     (scenario) =>
@@ -293,12 +293,12 @@ try {
 
   const result = {
     targetUrl,
-    passed: visibleAndUsable && (hasRtlPlugin || rtlConfigured) && hasOpenFreeMap && !hasFailure,
+    passed: visibleAndUsable && (hasRtlPlugin || rtlConfigured) && hasRasterTiles && !hasFailure,
     desktop,
     mobile,
     hasRtlPlugin,
     rtlConfigured,
-    hasOpenFreeMap,
+    hasRasterTiles,
     failedRequests: summary.failedRequests,
     consoleEvents: summary.consoleEvents,
     watchedResponses: summary.watchedResponses.slice(-30),
