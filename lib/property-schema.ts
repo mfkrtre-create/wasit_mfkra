@@ -1,170 +1,68 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-export const recordTypes = ["offer", "request"] as const;
-export const transactionTypes = ["sale", "rent", "buy", "rent_request"] as const;
-export const propertyTypes = [
-  "residential_land",
-  "commercial_land",
-  "villa",
-  "apartment",
-  "building",
-  "farm",
-  "office",
-  "warehouse",
-  "other",
-] as const;
-export const priceTypes = ["net", "negotiable", "unknown"] as const;
+export const recordTypes = ['offer', 'request'] as const;
+export const transactionTypes = ['sale', 'rent', 'buy', 'rent_request'] as const;
+export const propertyTypes = ['residential_land', 'commercial_land', 'villa', 'apartment', 'building', 'block', 'farm', 'office', 'shop', 'rest_house', 'tower', 'warehouse', 'other'] as const;
+export const propertyCategories = ['residential', 'commercial', 'industrial', 'agricultural'] as const;
+export const priceTypes = ['net', 'negotiable', 'unknown'] as const;
+
+const optionalText = z.string().trim().min(1).nullable();
+const optionalNumber = z.number().finite().nonnegative().nullable();
+const optionalPositive = z.number().finite().positive().nullable();
+const optionalInteger = z.number().int().positive().nullable();
 
 export const propertySchema = z.object({
-  recordType: z.enum(recordTypes),
-  transactionType: z.enum(transactionTypes).nullable(),
-  propertyType: z.enum(propertyTypes).nullable(),
-  city: z.string().trim().min(1).nullable(),
-  districts: z.array(z.string().trim().min(1)),
-  area: z.number().finite().positive().nullable(),
-  streetWidth: z.number().finite().positive().nullable(),
-  facade: z.string().trim().min(1).nullable(),
-  price: z.number().finite().nonnegative().nullable(),
-  priceBid: z.number().finite().nonnegative().nullable(),
-  maximumBudget: z.number().finite().nonnegative().nullable(),
-  priceType: z.enum(priceTypes).nullable(),
-  bedrooms: z.number().int().positive().nullable(),
-  minimumBedrooms: z.number().int().positive().nullable(),
-  bathrooms: z.number().int().positive().nullable(),
-  licenseNumber: z.string().trim().min(1).nullable(),
-  contactNumber: z.string().trim().min(1).nullable(),
-  description: z.string().trim().min(1).nullable(),
-  lengths: z.string().trim().min(1).nullable(),
-  planNumber: z.string().trim().min(1).nullable(),
-  blockNumber: z.string().trim().min(1).nullable(),
-  plotNumber: z.string().trim().min(1).nullable(),
-  ownerName: z.string().trim().min(1).nullable(),
-  clientName: z.string().trim().min(1).nullable(),
-  missingFields: z.array(z.string().trim().min(1)),
-  confidence: z.number().finite().min(0).max(1),
+  recordType: z.enum(recordTypes), transactionType: z.enum(transactionTypes).nullable(),
+  propertyType: z.enum(propertyTypes).nullable(), customPropertyType: optionalText, category: z.enum(propertyCategories).nullable(),
+  city: optionalText, districts: z.array(z.string().trim().min(1)),
+  area: optionalPositive, minimumArea: optionalPositive, maximumArea: optionalPositive,
+  streetWidth: optionalPositive, facade: optionalText, facades: z.array(z.string().trim().min(1)),
+  price: optionalNumber, priceBid: optionalNumber, maximumBudget: optionalNumber, pricePerMeter: optionalNumber, targetPricePerMeter: optionalNumber,
+  priceType: z.enum(priceTypes).nullable(), bedrooms: optionalInteger, minimumBedrooms: optionalInteger, bathrooms: optionalInteger,
+  propertyAge: optionalNumber, maximumPropertyAge: optionalNumber,
+  licenseNumber: optionalText, falLicenseNumber: optionalText, advertisementNumber: optionalText,
+  contactNumber: optionalText, description: optionalText, lengths: optionalText, planNumber: optionalText, blockNumber: optionalText, plotNumber: optionalText,
+  ownerName: optionalText, clientName: optionalText, technicalRequirements: optionalText,
+  missingFields: z.array(z.string().trim().min(1)), confidence: z.number().finite().min(0).max(1),
 });
 
 export type PropertyData = z.infer<typeof propertySchema>;
 
 export const defaultPropertyData: PropertyData = {
-  recordType: "offer",
-  transactionType: null,
-  propertyType: null,
-  city: null,
-  districts: [],
-  area: null,
-  streetWidth: null,
-  facade: null,
-  price: null,
-  priceBid: null,
-  maximumBudget: null,
-  priceType: null,
-  bedrooms: null,
-  minimumBedrooms: null,
-  bathrooms: null,
-  licenseNumber: null,
-  contactNumber: null,
-  description: null,
-  lengths: null,
-  planNumber: null,
-  blockNumber: null,
-  plotNumber: null,
-  ownerName: null,
-  clientName: null,
-  missingFields: [],
-  confidence: 0,
+  recordType: 'offer', transactionType: null, propertyType: null, customPropertyType: null, category: null,
+  city: null, districts: [], area: null, minimumArea: null, maximumArea: null, streetWidth: null, facade: null, facades: [],
+  price: null, priceBid: null, maximumBudget: null, pricePerMeter: null, targetPricePerMeter: null, priceType: null,
+  bedrooms: null, minimumBedrooms: null, bathrooms: null, propertyAge: null, maximumPropertyAge: null,
+  licenseNumber: null, falLicenseNumber: null, advertisementNumber: null, contactNumber: null, description: null,
+  lengths: null, planNumber: null, blockNumber: null, plotNumber: null, ownerName: null, clientName: null, technicalRequirements: null,
+  missingFields: [], confidence: 0,
 };
 
-const nullableString = { type: ["string", "null"] };
-const nullableNumber = { type: ["number", "null"] };
-const nullableInteger = { type: ["integer", "null"] };
+const nullableString = { type: ['string', 'null'] };
+const nullableNumber = { type: ['number', 'null'] };
+const nullableInteger = { type: ['integer', 'null'] };
 
 export const propertyJsonSchema = {
-  type: "object",
-  additionalProperties: false,
+  type: 'object', additionalProperties: false,
   properties: {
-    recordType: {
-      type: "string",
-      enum: recordTypes,
-      description: "Classify whether the message is an offer or a request.",
-    },
-    transactionType: {
-      type: ["string", "null"],
-      enum: [...transactionTypes, null],
-      description: "sale, rent, buy, rent_request, or null if not explicit.",
-    },
-    propertyType: {
-      type: ["string", "null"],
-      enum: [...propertyTypes, null],
-      description: "Real estate type, or null if not explicit.",
-    },
-    city: { ...nullableString, description: "City name exactly when mentioned." },
-    districts: {
-      type: "array",
-      items: { type: "string" },
-      description: "District names only when explicitly mentioned.",
-    },
-    area: { ...nullableNumber, description: "Area in square meters." },
-    streetWidth: { ...nullableNumber, description: "Street width in meters." },
-    facade: { ...nullableString, description: "Property facade or direction." },
-    price: { ...nullableNumber, description: "Offer price when mentioned." },
-    priceBid: { ...nullableNumber, description: "Explicit soum/bid price when mentioned." },
-    maximumBudget: { ...nullableNumber, description: "Maximum budget for requests." },
-    priceType: {
-      type: ["string", "null"],
-      enum: [...priceTypes, null],
-      description: "net for صافي, negotiable for قابل للتفاوض, unknown when price type is unclear.",
-    },
-    bedrooms: { ...nullableInteger, description: "Exact bedroom count." },
-    minimumBedrooms: { ...nullableInteger, description: "Minimum bedroom count." },
-    bathrooms: { ...nullableInteger, description: "Bathroom count." },
-    licenseNumber: { ...nullableString, description: "Advertisement license number." },
-    contactNumber: { ...nullableString, description: "Contact phone number." },
-    description: { ...nullableString, description: "Short Arabic summary based only on supplied text." },
-    lengths: { ...nullableString, description: "Explicit land dimensions such as 20x30." },
-    planNumber: { ...nullableString, description: "Plan number when explicitly mentioned." },
-    blockNumber: { ...nullableString, description: "Block number when explicitly mentioned." },
-    plotNumber: { ...nullableString, description: "Plot or parcel number when explicitly mentioned." },
-    ownerName: { ...nullableString, description: "Owner name when explicitly mentioned." },
-    clientName: { ...nullableString, description: "Client requester name when explicitly mentioned." },
-    missingFields: {
-      type: "array",
-      items: { type: "string" },
-      description: "Important fields that were not found in the text.",
-    },
-    confidence: {
-      type: "number",
-      minimum: 0,
-      maximum: 1,
-      description: "Extraction confidence from 0 to 1.",
-    },
+    recordType: { type: 'string', enum: recordTypes, description: 'offer for property being offered; request for a client need.' },
+    transactionType: { type: ['string', 'null'], enum: [...transactionTypes, null], description: 'sale, rent, buy, or rent_request only from explicit intent.' },
+    propertyType: { type: ['string', 'null'], enum: [...propertyTypes, null] },
+    customPropertyType: { ...nullableString, description: 'Free text type only when propertyType is other.' },
+    category: { type: ['string', 'null'], enum: [...propertyCategories, null] },
+    city: { ...nullableString }, districts: { type: 'array', items: { type: 'string' }, description: 'All explicitly mentioned districts.' },
+    area: { ...nullableNumber, description: 'Exact area only.' }, minimumArea: { ...nullableNumber }, maximumArea: { ...nullableNumber },
+    streetWidth: { ...nullableNumber }, facade: { ...nullableString }, facades: { type: 'array', items: { type: 'string' } },
+    price: { ...nullableNumber, description: 'Total selling/rental limit price, never price per meter.' },
+    priceBid: { ...nullableNumber, description: 'Explicit soum/bid price.' }, maximumBudget: { ...nullableNumber, description: 'Maximum request budget.' },
+    pricePerMeter: { ...nullableNumber, description: 'Explicit offer price per square meter.' }, targetPricePerMeter: { ...nullableNumber },
+    priceType: { type: ['string', 'null'], enum: [...priceTypes, null] }, bedrooms: { ...nullableInteger }, minimumBedrooms: { ...nullableInteger }, bathrooms: { ...nullableInteger },
+    propertyAge: { ...nullableNumber, description: 'Exact age in years; 0 when explicitly new.' }, maximumPropertyAge: { ...nullableNumber },
+    licenseNumber: { ...nullableString, description: 'Legacy ad license fallback.' }, falLicenseNumber: { ...nullableString }, advertisementNumber: { ...nullableString },
+    contactNumber: { ...nullableString }, description: { ...nullableString, description: 'Faithful concise Arabic summary retaining uncategorized facts.' },
+    lengths: { ...nullableString }, planNumber: { ...nullableString }, blockNumber: { ...nullableString }, plotNumber: { ...nullableString },
+    ownerName: { ...nullableString }, clientName: { ...nullableString }, technicalRequirements: { ...nullableString },
+    missingFields: { type: 'array', items: { type: 'string' } }, confidence: { type: 'number', minimum: 0, maximum: 1 },
   },
-  required: [
-    "recordType",
-    "transactionType",
-    "propertyType",
-    "city",
-    "districts",
-    "area",
-    "streetWidth",
-    "facade",
-    "price",
-    "priceBid",
-    "maximumBudget",
-    "priceType",
-    "bedrooms",
-    "minimumBedrooms",
-    "bathrooms",
-    "licenseNumber",
-    "contactNumber",
-    "description",
-    "lengths",
-    "planNumber",
-    "blockNumber",
-    "plotNumber",
-    "ownerName",
-    "clientName",
-    "missingFields",
-    "confidence",
-  ],
+  required: ['recordType', 'transactionType', 'propertyType', 'customPropertyType', 'category', 'city', 'districts', 'area', 'minimumArea', 'maximumArea', 'streetWidth', 'facade', 'facades', 'price', 'priceBid', 'maximumBudget', 'pricePerMeter', 'targetPricePerMeter', 'priceType', 'bedrooms', 'minimumBedrooms', 'bathrooms', 'propertyAge', 'maximumPropertyAge', 'licenseNumber', 'falLicenseNumber', 'advertisementNumber', 'contactNumber', 'description', 'lengths', 'planNumber', 'blockNumber', 'plotNumber', 'ownerName', 'clientName', 'technicalRequirements', 'missingFields', 'confidence'],
 } as const;

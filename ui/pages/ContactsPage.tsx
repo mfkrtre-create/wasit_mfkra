@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Users, Phone, ChevronDown, MessageCircle, Share2 } from 'lucide-react';
-import { useDB } from '@/ui/lib/db';
+import { Users, Phone, ChevronDown, MessageCircle, Plus, Share2 } from 'lucide-react';
+import { db, useDB } from '@/ui/lib/db';
 import { fmtDateTime, waLink } from '@/ui/lib/format';
 import { cn } from '@/ui/lib/utils';
 
@@ -11,11 +11,13 @@ interface ContactRow {
   listingTitles: Set<string>;
   shares: number;
   lastShareAt?: string;
+  notes?: string;
 }
 
 export function ContactsPage() {
-  const { listings, shareLogs } = useDB();
+  const { listings, shareLogs, contacts: savedContacts } = useDB();
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
 
   const contacts = useMemo(() => {
     const map = new Map<string, ContactRow>();
@@ -30,7 +32,12 @@ export function ContactsPage() {
       return row;
     };
 
-    for (const l of listings) {
+    for (const contact of savedContacts) {
+      const row = ensure(contact.name, contact.phone);
+      row.roles.add(contact.type === 'owner' ? 'مالك' : contact.type === 'tenant' ? 'مستأجر' : contact.type === 'broker' ? 'وسيط' : 'مشتري');
+      row.notes = contact.notes;
+    }
+    for (const l of listings.filter((item) => !item.deletedAt)) {
       if (l.kind === 'offer' && l.ownerName) {
         const row = ensure(l.ownerName, l.ownerPhone);
         row.roles.add('مالك');
@@ -51,13 +58,14 @@ export function ContactsPage() {
     }
 
     return [...map.values()].sort((a, b) => b.shares - a.shares || a.name.localeCompare(b.name, 'ar'));
-  }, [listings, shareLogs]);
+  }, [listings, savedContacts, shareLogs]);
 
   const timelineFor = (name: string) => shareLogs.filter((s) => s.recipientName === name);
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-5 md:py-8 space-y-5">
-      <header>
+      <header className="flex items-start justify-between gap-3">
+        <div>
         <h1 className="text-2xl md:text-3xl font-extrabold text-white flex items-center gap-2.5">
           <span className="w-10 h-10 rounded-xl gold-gradient flex items-center justify-center">
             <Users className="w-5 h-5 text-[#0f1f3d]" strokeWidth={2.5} />
@@ -67,7 +75,32 @@ export function ContactsPage() {
         <p className="text-sm text-muted-foreground mt-1.5">
           مالكون، عملاء، ومستلمون للمشاركات — مع سجل زمني لكل تواصل 📇
         </p>
+        </div>
+        <button onClick={() => setAdding((value) => !value)} className="gold-gradient text-[#0f1f3d] rounded-xl px-4 py-2.5 text-sm font-extrabold flex items-center gap-1.5"><Plus className="w-4 h-4" />إضافة عميل</button>
       </header>
+
+      {adding && (
+        <form className="rounded-2xl border border-[#c9972f]/25 bg-card p-4 grid sm:grid-cols-2 gap-2.5" onSubmit={(event) => {
+          event.preventDefault();
+          const form = new FormData(event.currentTarget);
+          db.addContact({
+            name: String(form.get('name') || '').trim(),
+            phone: String(form.get('phone') || '').trim(),
+            type: String(form.get('type') || 'buyer') as 'owner' | 'buyer' | 'tenant' | 'broker',
+            priority: String(form.get('priority') || 'medium') as 'high' | 'medium' | 'low',
+            notes: String(form.get('notes') || '').trim(),
+          });
+          event.currentTarget.reset();
+          setAdding(false);
+        }}>
+          <input required name="name" placeholder="اسم العميل" className="bg-secondary/50 border border-border rounded-xl px-3 py-2.5 text-sm text-white" />
+          <input name="phone" placeholder="05xxxxxxxx" className="bg-secondary/50 border border-border rounded-xl px-3 py-2.5 text-sm text-white nums-latin" />
+          <select name="type" className="bg-secondary/50 border border-border rounded-xl px-3 py-2.5 text-sm text-white"><option value="buyer">مشتري</option><option value="owner">مالك</option><option value="tenant">مستأجر</option><option value="broker">وسيط</option></select>
+          <select name="priority" className="bg-secondary/50 border border-border rounded-xl px-3 py-2.5 text-sm text-white"><option value="high">أولوية عالية</option><option value="medium">أولوية متوسطة</option><option value="low">أولوية منخفضة</option></select>
+          <textarea name="notes" rows={3} placeholder="ملاحظات CRM" className="sm:col-span-2 bg-secondary/50 border border-border rounded-xl px-3 py-2.5 text-sm text-white" />
+          <button className="sm:col-span-2 gold-gradient text-[#0f1f3d] rounded-xl py-2.5 text-sm font-extrabold">حفظ العميل</button>
+        </form>
+      )}
 
       {/* stats strip */}
       <div className="grid grid-cols-3 gap-3">
@@ -133,6 +166,7 @@ export function ContactsPage() {
                       </a>
                     )}
                     <div>
+                      {c.notes && <p className="text-xs text-slate-300 mb-3">{c.notes}</p>}
                       <p className="text-[11px] font-bold text-muted-foreground mb-1.5">الإعلانات المرتبطة:</p>
                       <div className="flex flex-wrap gap-1.5">
                         {[...c.listingTitles].map((t) => (

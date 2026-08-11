@@ -1,23 +1,34 @@
 import type { ParsedListing } from '@/ui/lib/parser';
-import type { ListingKind, PropertyType } from '@/ui/types';
+import type { ListingKind, PropertyCategory, PropertyType } from '@/ui/types';
 
 export type ServerPropertyData = {
   recordType: 'offer' | 'request';
   transactionType: 'sale' | 'rent' | 'buy' | 'rent_request' | null;
-  propertyType: 'residential_land' | 'commercial_land' | 'villa' | 'apartment' | 'building' | 'farm' | 'office' | 'warehouse' | 'other' | null;
+  propertyType: 'residential_land' | 'commercial_land' | 'villa' | 'apartment' | 'building' | 'block' | 'farm' | 'office' | 'shop' | 'rest_house' | 'tower' | 'warehouse' | 'other' | null;
+  customPropertyType: string | null;
+  category: PropertyCategory | null;
   city: string | null;
   districts: string[];
   area: number | null;
+  minimumArea: number | null;
+  maximumArea: number | null;
   streetWidth: number | null;
   facade: string | null;
+  facades: string[];
   price: number | null;
   priceBid?: number | null;
   maximumBudget: number | null;
+  pricePerMeter: number | null;
+  targetPricePerMeter: number | null;
   priceType: 'net' | 'negotiable' | 'unknown' | null;
   bedrooms: number | null;
   minimumBedrooms: number | null;
   bathrooms: number | null;
+  propertyAge: number | null;
+  maximumPropertyAge: number | null;
   licenseNumber: string | null;
+  falLicenseNumber: string | null;
+  advertisementNumber: string | null;
   contactNumber: string | null;
   description: string | null;
   lengths?: string | null;
@@ -26,6 +37,7 @@ export type ServerPropertyData = {
   plotNumber?: string | null;
   ownerName?: string | null;
   clientName?: string | null;
+  technicalRequirements: string | null;
   missingFields: string[];
   confidence: number;
 };
@@ -58,13 +70,21 @@ function propertyTypeFromAI(type: ServerPropertyData['propertyType']): PropertyT
   if (type === 'villa') return 'villa';
   if (type === 'apartment') return 'apartment';
   if (type === 'building') return 'building';
+  if (type === 'block') return 'block';
+  if (type === 'warehouse') return 'warehouse';
+  if (type === 'rest_house') return 'rest_house';
+  if (type === 'office') return 'office';
+  if (type === 'shop') return 'shop';
+  if (type === 'tower') return 'tower';
   if (type === 'farm') return 'farm';
-  if (type === 'office' || type === 'warehouse' || type === 'other') return 'other';
+  if (type === 'other') return 'other';
   return 'land';
 }
 
 export function parsedListingFromServerAI(data: ServerPropertyData, fallbackKind: ListingKind): ParsedListing & {
   adLicense?: string;
+  falLicense?: string;
+  category?: PropertyCategory;
   contactNumber?: string;
   contactName?: string;
   notes?: string;
@@ -81,14 +101,26 @@ export function parsedListingFromServerAI(data: ServerPropertyData, fallbackKind
         : 'buy';
   const fields: ParsedListing['fields'] = {};
   if (data.area) fields.area = data.area;
+  if (data.minimumArea) fields.areaMin = data.minimumArea;
+  if (data.maximumArea) fields.areaMax = data.maximumArea;
   if (data.streetWidth) fields.streetWidth = data.streetWidth;
-  if (data.facade) fields.frontage = data.facade;
-  if (data.bedrooms ?? data.minimumBedrooms) fields.bedrooms = data.bedrooms ?? data.minimumBedrooms ?? undefined;
+  const frontageKey = kind === 'request' ? 'preferredFrontages' : 'frontages';
+  if (data.facades.length) fields[frontageKey] = data.facades.join('، ');
+  else if (data.facade) fields[frontageKey] = data.facade;
+  if (data.pricePerMeter) fields.meterPrice = data.pricePerMeter;
+  if (data.targetPricePerMeter) fields.targetMeterPrice = data.targetPricePerMeter;
+  if (data.bedrooms) fields.bedrooms = data.bedrooms;
+  if (data.minimumBedrooms) fields.minimumBedrooms = data.minimumBedrooms;
   if (data.bathrooms) fields.bathrooms = data.bathrooms;
+  if (data.propertyAge !== null) fields.age = data.propertyAge;
+  if (data.maximumPropertyAge !== null) fields.maxAge = data.maximumPropertyAge;
   if (data.lengths) fields.lengths = data.lengths;
   if (data.planNumber) fields.planNo = data.planNumber;
   if (data.blockNumber) fields.blockNo = data.blockNumber;
   if (data.plotNumber) fields.plotNo = data.plotNumber;
+  if (data.customPropertyType) fields.customPropertyType = data.customPropertyType;
+  if (data.districts.length > 1) fields.preferredDistricts = data.districts.join('، ');
+  if (data.technicalRequirements) fields.technicalRequirements = data.technicalRequirements;
 
   const confidence = [
     `AI Gemini: ثقة ${Math.round(data.confidence * 100)}%`,
@@ -108,7 +140,9 @@ export function parsedListingFromServerAI(data: ServerPropertyData, fallbackKind
     priceAmbiguous: data.priceType === 'unknown',
     fields,
     confidence,
-    adLicense: data.licenseNumber ?? undefined,
+    adLicense: data.advertisementNumber ?? data.licenseNumber ?? undefined,
+    falLicense: data.falLicenseNumber ?? undefined,
+    category: data.category ?? undefined,
     contactNumber: data.contactNumber ?? undefined,
     contactName: kind === 'offer' ? (data.ownerName ?? undefined) : (data.clientName ?? undefined),
     notes: data.description ?? undefined,

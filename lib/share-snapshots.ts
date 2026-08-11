@@ -17,6 +17,7 @@ export type ShareRecordInput = {
   notes: string;
   lat: number | null;
   lng: number | null;
+  imageId: string | null;
 };
 
 export type ShareOptions = {
@@ -26,6 +27,7 @@ export type ShareOptions = {
   includeContact: boolean;
   includeNotes: boolean;
   includeMap: boolean;
+  includeImage: boolean;
   expiresInDays: number | null;
 };
 
@@ -45,6 +47,7 @@ export type PublicShareSnapshot = {
   notes?: string;
   lat?: number | null;
   lng?: number | null;
+  imageId?: string | null;
 };
 
 const kindLabels = {
@@ -79,5 +82,6 @@ export function buildPublicShareSnapshot(record: ShareRecordInput, options: Shar
     notes: options.includeNotes ? record.notes : undefined,
     lat: options.includeMap ? record.lat : undefined,
     lng: options.includeMap ? record.lng : undefined,
+    imageId: options.includeImage ? record.imageId : undefined,
   };
 }

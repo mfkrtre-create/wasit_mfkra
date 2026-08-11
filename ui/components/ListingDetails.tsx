@@ -8,19 +8,23 @@ import {
   Phone,
   BadgeCheck,
   AlertTriangle,
+  CalendarClock,
   RefreshCw,
   History,
+  Pencil,
   Trash2,
 } from 'lucide-react';
 import { useApp } from '@/ui/context/AppContext';
 import { db, isOverdue, useDB } from '@/ui/lib/db';
-import { ARCHIVE_REASON_LABELS, PROPERTY_TYPE_LABELS, statusLabel } from '@/ui/types';
+import { ARCHIVE_REASON_LABELS, PROPERTY_CATEGORY_LABELS, PROPERTY_TYPE_LABELS, statusLabel } from '@/ui/types';
 import { TYPE_FIELDS } from '@/ui/lib/fieldDefs';
 import { fmtDate, fmtDateTime, fmtMoney, timeAgo, waLink } from '@/ui/lib/format';
 import { buildRefreshMessage } from '@/ui/lib/share';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/ui/components/ui/sheet';
 import { ShareDialog } from '@/ui/components/ShareDialog';
 import { ArchiveDialog } from '@/ui/components/ArchiveDialog';
+import { EditListingDialog } from '@/ui/components/EditListingDialog';
+import { OfferCalculator } from '@/ui/components/OfferCalculator';
 import { toast } from 'sonner';
 
 export function ListingDetails() {
@@ -28,6 +32,7 @@ export function ListingDetails() {
   const { listings, shareLogs, activity, profile } = useDB();
   const [shareOpen, setShareOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   // always read the freshest version from the store
   const listing = listings.find((l) => l.id === viewingListing?.id) ?? null;
@@ -127,6 +132,7 @@ export function ListingDetails() {
             <section>
               <h3 className="text-sm font-extrabold text-[#e5bc55] mb-2">📋 تفاصيل {PROPERTY_TYPE_LABELS[listing.propertyType]}</h3>
               <div className="grid grid-cols-2 gap-2">
+                {listing.category && <div className="rounded-xl bg-secondary/50 border border-border px-3 py-2.5"><p className="text-[10px] text-muted-foreground font-semibold">التصنيف</p><p className="text-sm font-bold text-white mt-0.5">{PROPERTY_CATEGORY_LABELS[listing.category]}</p></div>}
                 {fieldRows.map((r) => (
                   <div key={r.label} className="rounded-xl bg-secondary/50 border border-border px-3 py-2.5">
                     <p className="text-[10px] text-muted-foreground font-semibold">{r.label}</p>
@@ -135,6 +141,8 @@ export function ListingDetails() {
                 ))}
               </div>
             </section>
+
+            {!isRequest && <OfferCalculator price={listing.priceAsk ?? headline} />}
 
             {/* licenses */}
             <section className="grid grid-cols-2 gap-2">
@@ -186,12 +194,13 @@ export function ListingDetails() {
 
             {/* refresh status */}
             {!archived && !terminal && (
-              <section className="rounded-xl border border-border bg-secondary/40 p-3.5 flex items-center justify-between text-sm">
+              <section className="rounded-xl border border-border bg-secondary/40 p-3.5 flex flex-wrap items-center justify-between gap-2 text-sm">
                 <span className="flex items-center gap-2 text-slate-200">
                   <RefreshCw className={overdue ? 'w-4 h-4 text-red-400' : 'w-4 h-4 text-emerald-400'} />
                   {overdue ? 'متأخر عن التحديث!' : `التذكير كل ${listing.refreshIntervalDays} يوم`}
                 </span>
                 <span className="text-xs text-muted-foreground">آخر تحديث: {timeAgo(listing.lastRefreshedAt)}</span>
+                <button onClick={() => { db.addReminder(listing.id); toast.success('تمت إضافة تذكير متابعة'); }} className="inline-flex items-center gap-1 text-[11px] font-extrabold text-[#e5bc55]"><CalendarClock className="w-3.5 h-3.5" />إضافة تذكير</button>
               </section>
             )}
 
@@ -273,7 +282,14 @@ export function ListingDetails() {
                 استعادة العقار نشط
               </button>
             ) : (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => setEditOpen(true)}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-[#c9972f]/35 bg-[#c9972f]/10 text-[#e5bc55] font-extrabold py-3"
+                >
+                  <Pencil className="w-4 h-4" />
+                  تعديل
+                </button>
                 <button
                   onClick={() => setShareOpen(true)}
                   className="flex items-center justify-center gap-2 rounded-xl gold-gradient text-[#0f1f3d] font-extrabold py-3 hover:brightness-110 transition-all"
@@ -292,14 +308,15 @@ export function ListingDetails() {
             )}
             <button
               onClick={() => {
+                if (!window.confirm(`سيُنقل "${listing.title}" إلى سلة المحذوفات لمدة 30 يوماً. هل تريد المتابعة؟`)) return;
                 db.deleteListing(listing.id);
                 setViewingListing(null);
-                toast.success('تم حذف الإعلان نهائياً');
+                toast.success('نُقل الإعلان إلى سلة المحذوفات');
               }}
               className="w-full flex items-center justify-center gap-1.5 rounded-xl text-red-400/80 hover:text-red-300 text-xs font-bold py-1.5 transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              حذف نهائي
+              نقل إلى سلة المحذوفات
             </button>
           </div>
         </SheetContent>
@@ -307,6 +324,7 @@ export function ListingDetails() {
 
       <ShareDialog listing={listing} open={shareOpen} onOpenChange={setShareOpen} />
       <ArchiveDialog listing={listing} open={archiveOpen} onOpenChange={setArchiveOpen} />
+      <EditListingDialog listing={listing} open={editOpen} onOpenChange={setEditOpen} />
     </>
   );
 }

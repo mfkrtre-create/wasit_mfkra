@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -43,7 +43,7 @@ describe('reference frontend integration', () => {
     const listings = source('ui', 'pages', 'ListingsPage.tsx');
     const card = source('ui', 'components', 'ListingCard.tsx');
     expect(listings).toContain('allStatuses(kind)');
-    expect(listings).toContain('ابحث بالعنوان، الحي، المدينة');
+    expect(listings).toContain('بحث ذكي:');
     expect(listings).toContain('<ListingCard');
     expect(card).toContain('مراسلة لتحديث العقار');
     expect(card).toContain('مشاركة');
@@ -78,10 +78,10 @@ describe('reference frontend integration', () => {
     expect(editor).toContain('<MapPicker');
   });
 
-  it('uses the reference Leaflet map and listing panel', () => {
+  it('uses the reference MapLibre OpenFreeMap map and listing panel', () => {
     const map = source('ui', 'pages', 'MapPage.tsx');
-    expect(map).toContain("import L from 'leaflet'");
-    expect(map).toContain('basemaps.cartocdn.com/dark_all');
+    expect(map).toContain("import('maplibre-gl')");
+    expect(map).toContain('tiles.openfreemap.org/styles/liberty');
     expect(map).toContain('خريطة الإعلانات');
     expect(map).toContain('قائمة الإعلانات');
   });
@@ -91,7 +91,7 @@ describe('reference frontend integration', () => {
     const account = source('ui', 'pages', 'AccountPage.tsx');
     expect(contacts).toContain('السجل الزمني للمشاركات');
     expect(contacts).toContain('مراسلة واتساب');
-    expect(account).toContain('الإحصائيات المالية');
+    expect(account).toContain('إحصائيات الأداء والصفقات');
     expect(account).toContain('رخصة فال');
   });
 
@@ -104,18 +104,17 @@ describe('reference frontend integration', () => {
     expect(adapter).not.toContain('localStorage');
   });
 
-  it('restores public share links and documents inside the reference app', () => {
+  it('restores public share links while keeping requirement documents out of the product UI', () => {
     const app = source('ui', 'App.tsx');
     const layout = source('ui', 'components', 'Layout.tsx');
     const shareDialog = source('ui', 'components', 'ShareDialog.tsx');
-    const documents = source('ui', 'pages', 'DocumentsPage.tsx');
-    const documentsApi = source('app', 'api', 'documents', 'route.ts');
-    expect(app).toContain('DocumentsPage');
-    expect(layout).toContain('/documents');
+    expect(app).not.toContain('DocumentsPage');
+    expect(layout).not.toContain('/documents');
     expect(shareDialog).toContain('createPublicShare');
     expect(shareDialog).toContain('revokePublicShare');
-    expect(documents).toContain('/api/documents');
-    expect(documentsApi).toContain('requireAuthenticatedRequest()');
+    expect(existsSync(join(process.cwd(), 'documents'))).toBe(true);
+    expect(existsSync(join(process.cwd(), 'ui', 'pages', 'DocumentsPage.tsx'))).toBe(false);
+    expect(existsSync(join(process.cwd(), 'app', 'api', 'documents', 'route.ts'))).toBe(false);
   });
 
   it('keeps AI and image server actions authenticated', () => {
@@ -134,7 +133,18 @@ describe('reference frontend integration', () => {
     expect(page).toContain('استعادة كلمة المرور');
     expect(page).toContain('رخصة فال');
     expect(profile).toContain('requireAuthenticatedRequest()');
-    expect(profile).not.toContain('phone =');
+    expect(profile).toContain('phone =');
     expect(profile).not.toContain('email =');
+  });
+
+  it('grounds Saudi-dialect AI extraction in the production schema', () => {
+    const extract = source('app', 'api', 'extract-property', 'route.ts');
+    const schema = source('lib', 'property-schema.ts');
+    expect(extract).toContain('SYSTEM_INSTRUCTION');
+    expect(extract).toContain('Saudi broker dialect');
+    expect(extract).toContain('Never infer');
+    expect(schema).toContain('technicalRequirements');
+    expect(schema).toContain('minimumArea');
+    expect(schema).toContain('maximumArea');
   });
 });

@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import Image from 'next/image';
 import { AlertTriangle, Image as ImageIcon, MapPin, Star, Trash2, UploadCloud } from 'lucide-react';
-import type { InputSource, ListingKind, PriceMode, PropertyImage, PropertyType } from '@/ui/types';
-import { OFFER_STATUS_LABELS, PROPERTY_TYPE_LABELS, REQUEST_STATUS_LABELS } from '@/ui/types';
-import { TYPE_FIELDS, type FieldDef } from '@/ui/lib/fieldDefs';
+import type { InputSource, ListingKind, PriceMode, PropertyCategory, PropertyImage, PropertyType } from '@/ui/types';
+import { OFFER_STATUS_LABELS, PROPERTY_CATEGORY_LABELS, PROPERTY_TYPE_LABELS, REQUEST_STATUS_LABELS } from '@/ui/types';
+import { COMMON_FIELDS, REQUEST_FIELDS, TYPE_FIELDS, type FieldDef } from '@/ui/lib/fieldDefs';
 import { landMeterFromTotal, landTotalFromMeter } from '@/ui/lib/parser';
 import { getProfile } from '@/ui/lib/db';
 import { cn } from '@/ui/lib/utils';
@@ -15,6 +15,7 @@ export interface Draft {
   kind: ListingKind;
   status: string;
   propertyType: PropertyType;
+  category?: PropertyCategory;
   title: string;
   titleTouched: boolean;
   city: string;
@@ -36,7 +37,7 @@ export interface Draft {
   notes?: string;
   source: InputSource;
   rawText?: string;
-  refreshIntervalDays: 7 | 14 | 30;
+  refreshIntervalDays: number;
 }
 
 export const emptyDraft = (kind: ListingKind, source: InputSource): Draft => ({
@@ -52,7 +53,7 @@ export const emptyDraft = (kind: ListingKind, source: InputSource): Draft => ({
   images: [],
   falLicense: getProfile().falLicense,
   source,
-  refreshIntervalDays: 14,
+  refreshIntervalDays: getProfile().defaultReminderDays,
 });
 
 export function autoTitle(d: Pick<Draft, 'propertyType' | 'status' | 'district' | 'kind'>): string {
@@ -92,7 +93,8 @@ function FieldInput({
       </div>
     );
   }
-  if (def.input === 'select') {
+  if (def.input === 'select' || def.input === 'multiselect') {
+    const selected = String(value ?? '').split(/[,،]/).map((item) => item.trim()).filter(Boolean);
     return (
       <div className="space-y-1.5">
         <span className="text-xs font-bold text-muted-foreground">{def.label}</span>
@@ -101,10 +103,17 @@ function FieldInput({
             <button
               key={opt}
               type="button"
-              onClick={() => onChange(value === opt ? undefined : opt)}
+              onClick={() => {
+                if (def.input === 'select') {
+                  onChange(value === opt ? undefined : opt);
+                  return;
+                }
+                const next = selected.includes(opt) ? selected.filter((item) => item !== opt) : [...selected, opt];
+                onChange(next.length ? next.join('، ') : undefined);
+              }}
               className={cn(
                 'text-xs font-bold px-3 py-1.5 rounded-full border transition-colors',
-                value === opt
+                (def.input === 'select' ? value === opt : selected.includes(opt))
                   ? 'bg-[#c9972f]/20 border-[#c9972f] text-[#e5bc55]'
                   : 'bg-secondary/50 border-border text-slate-300 hover:border-[#c9972f]/40',
               )}
@@ -154,7 +163,7 @@ export function DraftEditor({ draft, onChange }: { draft: Draft; onChange: (d: D
     const fields = { ...draft.fields, [key]: value };
     const next = { ...draft, fields };
     // land: سعر المتر → السعر الإجمالي
-    if (draft.propertyType === 'land' && (key === 'meterPrice' || key === 'area')) {
+    if ((draft.propertyType === 'land' || draft.propertyType === 'block') && (key === 'meterPrice' || key === 'area')) {
       const total = landTotalFromMeter(
         key === 'meterPrice' ? (value as number) : (fields.meterPrice as number),
         key === 'area' ? (value as number) : (fields.area as number),
@@ -167,18 +176,21 @@ export function DraftEditor({ draft, onChange }: { draft: Draft; onChange: (d: D
   const setPriceAsk = (v?: number) => {
     const next = { ...draft, priceAsk: v };
     // land: السعر الإجمالي → سعر المتر
-    if (draft.propertyType === 'land' && v && draft.fields.area) {
+    if ((draft.propertyType === 'land' || draft.propertyType === 'block') && v && draft.fields.area) {
       const mp = landMeterFromTotal(v, draft.fields.area as number);
       if (mp) next.fields = { ...next.fields, meterPrice: mp };
     }
     onChange(next);
   };
 
-  const fieldDefs = useMemo(() => {
-    return TYPE_FIELDS[draft.propertyType].filter((f) => !f.childOf || Boolean(draft.fields[f.childOf]));
-  }, [draft.propertyType, draft.fields]);
-
   const isRequest = draft.kind === 'request';
+
+  const fieldDefs = useMemo(() => {
+    const fields = isRequest
+      ? [...REQUEST_FIELDS, ...COMMON_FIELDS, ...TYPE_FIELDS[draft.propertyType]]
+      : [...COMMON_FIELDS, ...TYPE_FIELDS[draft.propertyType]];
+    return fields.filter((f, index) => fields.findIndex((candidate) => candidate.key === f.key) === index && (!f.childOf || Boolean(draft.fields[f.childOf])));
+  }, [draft.propertyType, draft.fields, isRequest]);
 
   const uploadImages = async (files: FileList | null) => {
     const selected = Array.from(files ?? []);
@@ -260,6 +272,27 @@ export function DraftEditor({ draft, onChange }: { draft: Draft; onChange: (d: D
 
       {/* property type */}
       <div className="space-y-1.5">
+        <span className="text-xs font-bold text-muted-foreground">التصنيف</span>
+        <div className="grid grid-cols-4 gap-1.5">
+          {(Object.entries(PROPERTY_CATEGORY_LABELS) as [PropertyCategory, string][]).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => set('category', value)}
+              className={cn(
+                'py-2 px-1 rounded-xl border text-xs font-bold transition-colors',
+                draft.category === value
+                  ? 'bg-[#c9972f]/20 border-[#c9972f] text-[#e5bc55]'
+                  : 'bg-secondary/50 border-border text-slate-300 hover:border-[#c9972f]/40',
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
         <span className="text-xs font-bold text-muted-foreground">نوع العقار</span>
         <div className="grid grid-cols-4 gap-1.5">
           {(Object.entries(PROPERTY_TYPE_LABELS) as [PropertyType, string][]).map(([value, label]) => (
@@ -279,6 +312,17 @@ export function DraftEditor({ draft, onChange }: { draft: Draft; onChange: (d: D
           ))}
         </div>
       </div>
+      {draft.propertyType === 'other' && (
+        <label className="space-y-1.5 block">
+          <span className="text-xs font-bold text-muted-foreground">نوع العقار الآخر</span>
+          <input
+            value={String(draft.fields.customPropertyType ?? '')}
+            onChange={(event) => setField('customPropertyType', event.target.value || undefined)}
+            placeholder="اكتب نوع العقار"
+            className="w-full bg-secondary/50 border border-border rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#c9972f]/60"
+          />
+        </label>
+      )}
 
       {/* title + location */}
       <div className="grid sm:grid-cols-2 gap-2.5">
@@ -314,7 +358,7 @@ export function DraftEditor({ draft, onChange }: { draft: Draft; onChange: (d: D
       <div className="grid grid-cols-2 gap-2.5">
         <label className="space-y-1.5 block">
           <span className="text-xs font-bold text-muted-foreground">
-            🏷️ سعر البيع / الحد {draft.propertyType === 'land' && <span className="text-[#c9972f]/80">(إجمالي الأرض)</span>}
+            🏷️ {isRequest ? 'الميزانية القصوى' : 'سعر البيع / الحد'} {(draft.propertyType === 'land' || draft.propertyType === 'block') && !isRequest && <span className="text-[#c9972f]/80">(إجمالي الأرض)</span>}
           </span>
           <input
             type="number"
@@ -323,7 +367,7 @@ export function DraftEditor({ draft, onChange }: { draft: Draft; onChange: (d: D
             className="w-full bg-secondary/50 border border-border rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#c9972f]/60 nums-latin"
           />
         </label>
-        <label className="space-y-1.5 block">
+        {!isRequest && <label className="space-y-1.5 block">
           <span className="text-xs font-bold text-muted-foreground">💬 سعر السوم (قابل للتحديث)</span>
           <input
             type="number"
@@ -331,11 +375,11 @@ export function DraftEditor({ draft, onChange }: { draft: Draft; onChange: (d: D
             onChange={(e) => set('priceBid', e.target.value === '' ? undefined : Number(e.target.value))}
             className="w-full bg-secondary/50 border border-border rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#c9972f]/60 nums-latin"
           />
-        </label>
+        </label>}
       </div>
 
       {/* price mode + ambiguous toggle */}
-      <div className="flex flex-wrap items-center gap-2">
+      {!isRequest && <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-bold text-muted-foreground">السعر الأساسي المعروض:</span>
         {(['ask', 'bid'] as const).map((m) => (
           <button
@@ -361,8 +405,8 @@ export function DraftEditor({ draft, onChange }: { draft: Draft; onChange: (d: D
             🔁 تبديل إلى {draft.priceMode === 'ask' ? 'سوم' : 'حد'}
           </button>
         )}
-      </div>
-      {draft.priceAmbiguous && (
+      </div>}
+      {!isRequest && draft.priceAmbiguous && (
         <p className="text-[11px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2.5 py-1.5">
           لم يُحدد النص ما إذا كان السعر «سوم» أم «حد» — صُنّف افتراضياً كـ«{draft.priceMode === 'ask' ? 'حد' : 'سوم'}».
         </p>
@@ -401,7 +445,7 @@ export function DraftEditor({ draft, onChange }: { draft: Draft; onChange: (d: D
           />
         </label>
       </div>
-      {!draft.adLicense && (
+      {!isRequest && !draft.adLicense && (
         <div className="flex items-center gap-2 text-[11px] font-semibold text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2.5 py-1.5">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
           تنبيه: رقم الإعلان العقاري غير مُدخل — يمكنك الحفظ الآن وإضافته لاحقاً.
@@ -537,6 +581,7 @@ export function DraftEditor({ draft, onChange }: { draft: Draft; onChange: (d: D
             </button>
           ))}
         </div>
+        <input type="number" min={1} max={365} value={draft.refreshIntervalDays} onChange={(event) => set('refreshIntervalDays', Math.max(1, Math.min(365, Number(event.target.value) || 14)))} className="w-full bg-secondary/50 border border-border rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#c9972f]/60 nums-latin" aria-label="فترة تذكير مخصصة بالأيام" />
       </div>
 
       {/* notes */}

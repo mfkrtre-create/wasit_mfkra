@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Image from "next/image";
 import { hashToken } from "@/lib/app-auth";
 import { getDb } from "@/lib/db";
 import { type PublicShareSnapshot } from "@/lib/share-snapshots";
@@ -58,6 +59,7 @@ export default async function SharePage({ params }: SharePageProps) {
   return (
     <main className="min-h-screen bg-slate-100 p-4 text-slate-950 lg:p-8">
       <section className="mx-auto grid max-w-4xl gap-5">
+        {snapshot.imageId ? <Image src={`/api/public-shares/${encodeURIComponent(token)}/image`} alt={snapshot.title} width={1200} height={675} unoptimized className="aspect-[16/9] w-full rounded-2xl border border-slate-200 bg-white object-cover shadow-sm" /> : null}
         <header className="rounded-2xl border border-teal-100 bg-white p-6 shadow-sm">
           <p className="text-sm font-bold text-teal-700">مشاركة عقارية من مفكرة الوسيط</p>
           <h1 className="mt-3 text-3xl font-black leading-tight">{snapshot.title || row.title}</h1>

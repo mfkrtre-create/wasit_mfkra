@@ -1,8 +1,9 @@
-import type { ListingKind, PriceMode, PropertyType } from '@/ui/types';
+import type { ListingKind, PriceMode, PropertyCategory, PropertyType } from '@/ui/types';
 
 export interface ParsedListing {
   kind: ListingKind;
   propertyType: PropertyType;
+  category?: PropertyCategory;
   status: string;
   district: string;
   city: string;
@@ -41,9 +42,13 @@ const TYPE_KEYWORDS: Array<{ type: PropertyType; words: string[] }> = [
   { type: 'villa', words: ['فيلا', 'الفيلا', 'فله', 'الفله', 'دبلكس'] },
   { type: 'apartment', words: ['شقه', 'الشقه', 'شقق'] },
   { type: 'building', words: ['عماره', 'العماره', 'عمائر'] },
+  { type: 'block', words: ['بلك', 'البلك'] },
+  { type: 'warehouse', words: ['مستودع', 'المستودع', 'مستودعات'] },
+  { type: 'rest_house', words: ['استراحه', 'الاستراحه', 'شاليه'] },
+  { type: 'office', words: ['مكتب', 'المكتب'] },
+  { type: 'shop', words: ['محل', 'المحل', 'محلات'] },
   { type: 'farm', words: ['مزرعه', 'المزرعه', 'حقل'] },
   { type: 'tower', words: ['برج', 'البرج', 'ابراج'] },
-  { type: 'other', words: ['استراحه', 'الاستراحه', 'مكتب', 'المكتب', 'محل', 'المحل', 'مستودع'] },
   { type: 'land', words: ['ارض', 'الارض', 'قطعه', 'القطعه'] },
 ];
 
@@ -54,7 +59,7 @@ export function parseListingText(raw: string): ParsedListing {
   const fields: Record<string, string | number | boolean | undefined> = {};
 
   // ---- kind & status ----
-  const isRequest = /مطلوب|ابحث|ابغي|أبحث|محتاج/.test(flat);
+  const isRequest = /مطلوب|ابحث|ابغي|أبحث|محتاج|زبون\s+(?:يبي|يدور)|عميل\s+(?:يبي|يدور)|يبي|يدور/.test(flat);
   const kind: ListingKind = isRequest ? 'request' : 'offer';
   let status: string;
   if (isRequest) {
@@ -75,6 +80,7 @@ export function parseListingText(raw: string): ParsedListing {
     }
   }
   confidence.push('تم التعرف على نوع العقار');
+  const category: PropertyCategory | undefined = /تجاري/.test(flat) ? 'commercial' : /صناعي/.test(flat) ? 'industrial' : /زراعي/.test(flat) ? 'agricultural' : /سكني/.test(flat) ? 'residential' : undefined;
 
   // ---- district: حي X ----
   let district = '';
@@ -113,6 +119,12 @@ export function parseListingText(raw: string): ParsedListing {
       confidence.push(`المساحة: ${v.toLocaleString('en-US')} م²`);
     }
   }
+  const areaRange = flat.match(/مساح[هه]\s*(?:من)?\s*(\d[\d,]*)\s*(?:الى|إلى|-)\s*(\d[\d,]*)/);
+  if (isRequest && areaRange) {
+    fields.areaMin = toAmount(areaRange[1]);
+    fields.areaMax = toAmount(areaRange[2]);
+    delete fields.area;
+  }
 
   // ---- street width ----
   const streetMatch = flat.match(/شارع\s*(\d{1,3})/) || flat.match(/عرض\s*الشارع\s*(\d{1,3})/);
@@ -123,7 +135,10 @@ export function parseListingText(raw: string): ParsedListing {
 
   // ---- age ----
   const ageMatch = flat.match(/عمر[ها]{0,3}\s*(\d{1,3})/) || flat.match(/العمر\s*(\d{1,3})/);
-  if (ageMatch) fields.age = parseInt(ageMatch[1], 10);
+  if (ageMatch) fields[isRequest && /لا\s*(?:يتجاوز|يزيد)/.test(flat) ? 'maxAge' : 'age'] = parseInt(ageMatch[1], 10);
+
+  const directions = ['شماليه', 'جنوبيه', 'شرقيه', 'غربيه'].filter((direction) => flat.includes(direction));
+  if (directions.length) fields[isRequest ? 'preferredFrontages' : 'frontages'] = directions.map((direction) => direction.replace(/ه$/, 'ة')).join('، ');
 
   // ---- meter price ----
   const meterMatch = flat.match(/(?:سعر\s*)?المتر\s*(\d[\d,]*)/) || flat.match(/متر\s*ب?\s*(\d[\d,]*)/);
@@ -182,7 +197,7 @@ export function parseListingText(raw: string): ParsedListing {
   if (priceBid !== undefined) confidence.push(`السوم: ${priceBid.toLocaleString('en-US')} ر.س`);
   if (priceAsk !== undefined) confidence.push(`الحد: ${priceAsk.toLocaleString('en-US')} ر.س`);
 
-  return { kind, propertyType, status, district, city, priceBid, priceAsk, priceMode, priceAmbiguous, fields, confidence };
+  return { kind, propertyType, category, status, district, city, priceBid, priceAsk, priceMode, priceAmbiguous, fields, confidence };
 }
 
 /** Bidirectional land price: meter price × area */

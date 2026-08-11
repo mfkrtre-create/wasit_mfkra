@@ -1,11 +1,13 @@
+import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
-import { Home, Tag, Inbox, Map as MapIcon, Users, UserCircle, Plus, Building2, FileText } from 'lucide-react';
+import { Bell, Home, Tag, Inbox, Map as MapIcon, Users, UserCircle, Plus, Building2, ShieldCheck } from 'lucide-react';
 import { useApp } from '@/ui/context/AppContext';
 import { useDB } from '@/ui/lib/db';
 import { isOverdue } from '@/ui/lib/db';
 import { cn } from '@/ui/lib/utils';
 import { QuickAddModal } from '@/ui/components/quick-add/QuickAddModal';
 import { Toaster } from '@/ui/components/ui/sonner';
+import { NotificationCenter } from '@/ui/components/NotificationCenter';
 
 const NAV_ITEMS = [
   { to: '/', label: 'الرئيسية', icon: Home },
@@ -13,15 +15,16 @@ const NAV_ITEMS = [
   { to: '/requests', label: 'الطلبات', icon: Inbox },
   { to: '/map', label: 'الخريطة', icon: MapIcon },
   { to: '/contacts', label: 'العملاء', icon: Users },
-  { to: '/documents', label: 'documents', icon: FileText },
   { to: '/account', label: 'حسابي', icon: UserCircle },
 ];
 
 export function Layout() {
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const { openQuickAdd } = useApp();
-  const { listings, profile } = useDB();
+  const { listings, profile, notifications } = useDB();
   const location = useLocation();
   const overdueCount = listings.filter(isOverdue).length;
+  const unreadCount = notifications.filter((item) => !item.read).length;
   const isMapPage = location.pathname === '/map';
 
   return (
@@ -41,8 +44,12 @@ export function Layout() {
         </div>
 
         <div className="px-4 py-3">
-          <div className="rounded-xl bg-secondary/60 border border-border p-3">
-            <p className="font-bold text-sm text-white">{profile.name}</p>
+          <div className="rounded-xl bg-secondary/60 border border-border p-3 relative">
+            <button onClick={() => setNotificationsOpen(true)} className="absolute top-2 left-2 grid size-8 place-items-center rounded-lg border border-border text-slate-300 hover:text-[#e5bc55]" aria-label="الإشعارات">
+              <Bell className="w-4 h-4" />
+              {unreadCount > 0 && <span className="absolute -top-1 -left-1 min-w-4 h-4 px-1 rounded-full bg-red-500 text-[9px] text-white font-bold nums-latin">{unreadCount}</span>}
+            </button>
+            <p className="font-bold text-sm text-white pe-9">{profile.name}</p>
             <p className="text-xs text-muted-foreground mt-0.5">فال: {profile.falLicense}</p>
             <span className="inline-block mt-1.5 text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#c9972f]/15 text-[#e5bc55] border border-[#c9972f]/30">
               {profile.tier}
@@ -74,6 +81,7 @@ export function Layout() {
               )}
             </NavLink>
           ))}
+          {profile.role === 'admin' && <NavLink to="/admin" className={({ isActive }) => cn('flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all border', isActive ? 'bg-[#c9972f]/15 text-[#e5bc55] border-[#c9972f]/30' : 'text-muted-foreground hover:bg-secondary/70 hover:text-white border-transparent')}><ShieldCheck className="w-5 h-5" /><span>إدارة المنصة</span></NavLink>}
         </nav>
 
         <div className="p-4 border-t border-border">
@@ -105,8 +113,8 @@ export function Layout() {
             NAV_ITEMS[1],
             NAV_ITEMS[2],
             NAV_ITEMS[3],
+            NAV_ITEMS[4],
             NAV_ITEMS[5],
-            NAV_ITEMS[6],
           ].map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
@@ -147,7 +155,13 @@ export function Layout() {
         </button>
       )}
 
+      <button onClick={() => setNotificationsOpen(true)} className="md:hidden fixed top-4 left-4 z-40 grid size-11 place-items-center rounded-xl border border-border bg-[#0c1a36]/95 text-slate-200 shadow-lg" aria-label="الإشعارات">
+        <Bell className="w-5 h-5" />
+        {unreadCount > 0 && <span className="absolute -top-1 -left-1 min-w-4 h-4 px-1 rounded-full bg-red-500 text-[9px] text-white font-bold nums-latin">{unreadCount}</span>}
+      </button>
+
       <QuickAddModal />
+      <NotificationCenter open={notificationsOpen} onOpenChange={setNotificationsOpen} />
       <Toaster position="top-center" richColors theme="dark" />
     </div>
   );

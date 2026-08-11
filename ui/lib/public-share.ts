@@ -8,6 +8,7 @@ export type PublicShareOptions = {
   includeContact: boolean;
   includeNotes: boolean;
   includeMap: boolean;
+  includeImage: boolean;
   expiresInDays: number | null;
 };
 
@@ -27,6 +28,7 @@ export const defaultPublicShareOptions = (shareOptions: ShareOptions): PublicSha
   includeContact: shareOptions.showBrokerNumber,
   includeNotes: false,
   includeMap: true,
+  includeImage: shareOptions.includeImage,
   expiresInDays: 30,
 });
 
@@ -57,6 +59,7 @@ export function publicShareRecord(listing: Listing) {
     notes: listing.notes ?? '',
     lat: listing.lat ?? null,
     lng: listing.lng ?? null,
+    imageId: (listing.images.find((image) => image.main) ?? listing.images[0])?.id ?? null,
   };
 }
 

@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 
 const schema = z.object({
   name: z.string().trim().min(1).max(120),
+  phone: z.string().trim().max(30).optional().or(z.literal("")),
   falLicense: z.string().trim().max(80).optional().or(z.literal("")),
   timezone: z.string().trim().min(1).max(80).default("Asia/Riyadh"),
 });
@@ -25,11 +26,11 @@ export async function PUT(request: Request) {
   const result = await getDb().query(
     `
       update app_users
-      set name = $2, fal_license = $3, timezone = $4
+      set name = $2, phone = $3, fal_license = $4, timezone = $5
       where id = $1
       returning id, email, username, phone, name, role, timezone, fal_license, email_confirmed_at
     `,
-    [user.id, parsed.data.name, parsed.data.falLicense || "", parsed.data.timezone],
+    [user.id, parsed.data.name, parsed.data.phone || "", parsed.data.falLicense || "", parsed.data.timezone],
   );
 
   const row = result.rows[0];

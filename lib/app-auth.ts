@@ -15,6 +15,7 @@ export type AppUser = {
   timezone: string;
   falLicense: string;
   emailConfirmed: boolean;
+  referralCode?: string;
 };
 
 export const sessionCookieName = "wasit_session";
@@ -52,6 +53,7 @@ function rowToUser(row: Record<string, unknown>): AppUser {
     timezone: String(row.timezone || "Asia/Riyadh"),
     falLicense: String(row.fal_license || ""),
     emailConfirmed: Boolean(row.email_confirmed_at),
+    referralCode: String(row.referral_code || ''),
   };
 }
 
@@ -91,10 +93,10 @@ export async function getCurrentUser() {
 
   const result = await getDb().query(
     `
-      select u.id, u.email, u.username, u.phone, u.name, u.role, u.timezone, u.fal_license, u.email_confirmed_at
+      select u.id, u.email, u.username, u.phone, u.name, u.role, u.timezone, u.fal_license, u.email_confirmed_at, u.referral_code
       from app_sessions s
       join app_users u on u.id = s.user_id
-      where s.token_hash = $1 and s.expires_at > now()
+      where s.token_hash = $1 and s.expires_at > now() and u.is_active = true
       limit 1
     `,
     [hashToken(token)],

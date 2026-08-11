@@ -23,6 +23,7 @@ const recordSchema = z.object({
   notes: z.string().default(""),
   lat: z.number().nullable(),
   lng: z.number().nullable(),
+  imageId: z.string().nullable().default(null),
 });
 
 const shareSchema = z.object({
@@ -34,6 +35,7 @@ const shareSchema = z.object({
     includeContact: z.boolean().default(false),
     includeNotes: z.boolean().default(false),
     includeMap: z.boolean().default(true),
+    includeImage: z.boolean().default(false),
     expiresInDays: z.number().int().min(1).max(365).nullable().default(30),
   }),
 });

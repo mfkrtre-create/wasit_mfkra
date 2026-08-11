@@ -15,6 +15,9 @@ const OPTION_DEFS: Array<{ key: keyof ShareOptions; label: string; emoji: string
   { key: 'showPrice', label: 'إظهار السعر', emoji: '💰' },
   { key: 'showBrokerNumber', label: 'إظهار رقم الوسيط', emoji: '📞' },
   { key: 'showBidInstead', label: 'إظهار السوم بدل الحد', emoji: '💬' },
+  { key: 'includeArea', label: 'إظهار المساحة', emoji: '📐' },
+  { key: 'includeMap', label: 'إظهار رابط الموقع', emoji: '📍' },
+  { key: 'includeImage', label: 'إظهار رابط الصورة', emoji: '🖼️' },
   { key: 'includeQuickLink', label: 'تضمين رابط تصفح سريع', emoji: '🔗' },
 ];
 
@@ -32,6 +35,9 @@ export function ShareDialog({
     showPrice: true,
     showBrokerNumber: true,
     showBidInstead: false,
+    includeArea: true,
+    includeMap: false,
+    includeImage: false,
     includeQuickLink: false,
   });
   const [recipientName, setRecipientName] = useState('');
@@ -44,12 +50,12 @@ export function ShareDialog({
 
   const message = useMemo(() => {
     const base = buildShareMessage(listing, { ...opts, includeQuickLink: false }, profile);
-    return opts.includeQuickLink && publicUrl ? `${base}\n🔗 تصفح سريع: ${publicUrl}` : base;
+    return (opts.includeQuickLink || opts.includeImage) && publicUrl ? `${base}\n🔗 التفاصيل${opts.includeImage ? ' والصورة' : ''}: ${publicUrl}` : base;
   }, [listing, opts, profile, publicUrl]);
 
   const ensurePublicUrl = async () => {
     if (publicUrl) return publicUrl;
-    const result = await createPublicShare(listing, publicOpts);
+    const result = await createPublicShare(listing, { ...publicOpts, includeImage: opts.includeImage });
     setPublicUrl(result.url);
     setPublicLinks((current) => [result.share, ...current]);
     return result.url;
@@ -57,9 +63,9 @@ export function ShareDialog({
 
   const send = async (platform: SharePlatform) => {
     let finalMessage = message;
-    if (opts.includeQuickLink && !publicUrl) {
+    if ((opts.includeQuickLink || opts.includeImage) && !publicUrl) {
       const url = await ensurePublicUrl();
-      finalMessage = `${buildShareMessage(listing, { ...opts, includeQuickLink: false }, profile)}\n🔗 تصفح سريع: ${url}`;
+      finalMessage = `${buildShareMessage(listing, { ...opts, includeQuickLink: false }, profile)}\n🔗 التفاصيل${opts.includeImage ? ' والصورة' : ''}: ${url}`;
     }
     db.addShareLog({
       listingId: listing.id,
@@ -191,6 +197,7 @@ export function ShareDialog({
               ['includeContact', 'التواصل'],
               ['includeNotes', 'الملاحظات'],
               ['includeMap', 'الخريطة'],
+              ['includeImage', 'صورة العقار'],
             ].map(([key, label]) => (
               <label key={key} className="flex items-center gap-2 text-xs font-bold text-slate-200">
                 <Checkbox

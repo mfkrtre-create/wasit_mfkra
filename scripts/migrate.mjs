@@ -33,6 +33,7 @@ const migrations = [
   "202608020001_server_auth.sql",
   "202608020002_share_snapshots.sql",
   "202608020003_account_fields_and_otp.sql",
+  "202608110001_admin_and_referrals.sql",
 ];
 const databaseUrl = process.env.DATABASE_URL;
 

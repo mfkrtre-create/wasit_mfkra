@@ -6,10 +6,13 @@ import type {
   ActivityType,
   ArchiveReason,
   Commission,
+  Contact,
   DBShape,
   Listing,
   ListingKind,
+  NotificationItem,
   Profile,
+  Reminder,
   ShareLog,
 } from '@/ui/types';
 
@@ -25,19 +28,24 @@ export interface BackendUser {
   timezone: string;
   falLicense: string;
   emailConfirmed: boolean;
+  referralCode?: string;
 }
 
 const emptyProfile: Profile = {
   name: 'وسيط عقاري',
+  email: '',
+  role: 'broker',
+  timezone: 'Asia/Riyadh',
   falLicense: 'غير مضاف',
   tier: 'وسيط نشط',
   phone: '',
   city: 'الرياض',
   referralCode: '',
+  defaultReminderDays: 14,
   apiKeys: {},
 };
 
-let state: DBShape = { listings: [], shareLogs: [], activity: [], profile: emptyProfile };
+let state: DBShape = { listings: [], contacts: [], reminders: [], notifications: [], shareLogs: [], activity: [], profile: emptyProfile };
 let backendWorkspace: JsonRecord = {};
 let initialized = false;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -90,10 +98,29 @@ function propertyTypeFromBackend(value: unknown): Listing['propertyType'] {
   if (type.includes('villa') || type.includes('فيلا')) return 'villa';
   if (type.includes('apartment') || type.includes('شقة')) return 'apartment';
   if (type.includes('building') || type.includes('عمارة')) return 'building';
+  if (type.includes('block') || type.includes('بلك')) return 'block';
+  if (type.includes('warehouse') || type.includes('مستودع')) return 'warehouse';
+  if (type.includes('rest_house') || type.includes('استراحة') || type.includes('شاليه')) return 'rest_house';
+  if (type.includes('office') || type.includes('مكتب')) return 'office';
+  if (type.includes('shop') || type.includes('محل')) return 'shop';
   if (type.includes('farm') || type.includes('مزرعة')) return 'farm';
   if (type.includes('tower') || type.includes('برج')) return 'tower';
   if (type.includes('land') || type.includes('أرض') || type.includes('ارض')) return 'land';
   return 'other';
+}
+
+function categoryFromBackend(value: unknown): Listing['category'] {
+  const category = asString(value).toLowerCase();
+  if (category.includes('commercial') || category.includes('تجار')) return 'commercial';
+  if (category.includes('industrial') || category.includes('صناع')) return 'industrial';
+  if (category.includes('agricultural') || category.includes('زراع')) return 'agricultural';
+  if (category.includes('residential') || category.includes('سكن')) return 'residential';
+  return undefined;
+}
+
+function reminderDays(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 1 && parsed <= 365 ? Math.round(parsed) : 14;
 }
 
 function statusFromBackend(kind: ListingKind, value: unknown): Listing['status'] {
@@ -120,6 +147,9 @@ function listingFromBackend(rawValue: unknown, clientValue?: unknown): Listing {
     area: asNumber(raw.area) ?? savedFields.area,
     streetWidth: asNumber(raw.streetWidth) ?? savedFields.streetWidth,
     frontage: asString(raw.facade) || savedFields.frontage,
+    frontages: Array.isArray(raw.facades)
+      ? raw.facades.map((item) => asString(item)).filter(Boolean).join('، ')
+      : savedFields.frontages,
     lengths: asString(raw.lengths) || savedFields.lengths,
     planNo: asString(raw.planNumber) || savedFields.planNo,
     blockNo: asString(raw.blockNumber) || savedFields.blockNo,
@@ -133,6 +163,7 @@ function listingFromBackend(rawValue: unknown, clientValue?: unknown): Listing {
     kind,
     status: statusFromBackend(kind, raw.status),
     propertyType: propertyTypeFromBackend(raw.propertyType),
+    category: categoryFromBackend(raw.category),
     title: asString(raw.title, kind === 'offer' ? 'عرض عقاري' : 'طلب عقاري'),
     city: asString(raw.city, 'الرياض'),
     district: asString(raw.district),
@@ -152,10 +183,11 @@ function listingFromBackend(rawValue: unknown, clientValue?: unknown): Listing {
     notes: asString(raw.notes),
     source: raw.source === 'ai-text' ? 'whatsapp' : raw.source === 'ai-voice' ? 'voice' : 'manual',
     rawText: asString(raw.rawText) || undefined,
-    refreshIntervalDays: raw.reminderDays === 7 || raw.reminderDays === 30 ? raw.reminderDays : 14,
+    refreshIntervalDays: reminderDays(raw.reminderDays),
     lastRefreshedAt: asString(raw.lastRefreshedAt) || asString(raw.updatedAt) || now(),
     createdAt: asString(raw.createdAt) || now(),
     updatedAt: asString(raw.updatedAt) || now(),
+    deletedAt: asString(raw.deletedAt) || undefined,
     archivedAt: asString(raw.archivedAt) || undefined,
     archiveReason: raw.archiveReason as ArchiveReason | undefined,
     commission: raw.commission as Commission | undefined,
@@ -170,7 +202,7 @@ function backendStatus(listing: Listing): string {
 }
 
 function backendPropertyType(type: Listing['propertyType']): string {
-  return ({ land: 'أرض', villa: 'فيلا', apartment: 'شقة', building: 'عمارة', farm: 'مزرعة', tower: 'برج', other: 'أخرى' } as const)[type];
+  return ({ land: 'أرض', villa: 'فيلا', apartment: 'شقة', building: 'عمارة', block: 'بلك', warehouse: 'مستودع', rest_house: 'استراحة', office: 'مكتب', shop: 'محل', farm: 'مزرعة', tower: 'برج', other: 'أخرى' } as const)[type];
 }
 
 function listingToBackend(listing: Listing, previousValue: unknown): JsonRecord {
@@ -182,6 +214,7 @@ function listingToBackend(listing: Listing, previousValue: unknown): JsonRecord 
     kind: listing.kind,
     title: listing.title,
     propertyType: backendPropertyType(listing.propertyType),
+    category: listing.category ?? '',
     transaction: listing.kind === 'offer' ? (listing.status === 'for_rent' ? 'إيجار' : 'بيع') : listing.status === 'rent' ? 'طلب إيجار' : 'شراء',
     status: backendStatus(listing),
     city: listing.city,
@@ -193,7 +226,9 @@ function listingToBackend(listing: Listing, previousValue: unknown): JsonRecord 
     basePriceMode: listing.priceMode === 'bid' ? 'asking' : 'limit',
     streetWidth: asNumber(fields.streetWidth) ?? null,
     facade: asString(fields.frontage),
-    facades: fields.frontage ? [String(fields.frontage)] : [],
+    facades: asString(fields.frontages)
+      ? asString(fields.frontages).split(/[,،]/).map((item) => item.trim()).filter(Boolean)
+      : fields.frontage ? [String(fields.frontage)] : [],
     lengths: asString(fields.lengths),
     planNumber: asString(fields.planNo),
     blockNumber: asString(fields.blockNo),
@@ -215,7 +250,7 @@ function listingToBackend(listing: Listing, previousValue: unknown): JsonRecord 
     lng: listing.lng ?? null,
     createdAt: listing.createdAt,
     updatedAt: listing.updatedAt,
-    deletedAt: undefined,
+    deletedAt: listing.deletedAt ?? null,
     lastRefreshedAt: listing.lastRefreshedAt,
     archivedAt: listing.archivedAt,
     archiveReason: listing.archiveReason,
@@ -238,6 +273,48 @@ function activityFromBackend(value: unknown): ActivityLog {
   };
 }
 
+function contactFromBackend(value: unknown): Contact {
+  const raw = asObject(value);
+  const type = asString(raw.type);
+  const priority = asString(raw.priority);
+  return {
+    id: asString(raw.id, uid()),
+    name: asString(raw.name, 'بدون اسم'),
+    phone: asString(raw.phone),
+    type: type === 'owner' || type === 'tenant' || type === 'broker' ? type : 'buyer',
+    priority: priority === 'high' || priority === 'low' ? priority : 'medium',
+    notes: asString(raw.notes),
+    lastContactAt: asString(raw.lastContactAt) || now(),
+  };
+}
+
+function reminderFromBackend(value: unknown): Reminder | null {
+  const raw = asObject(value);
+  const listingId = asString(raw.listingId) || asString(raw.recordId);
+  if (!listingId) return null;
+  const status = asString(raw.status);
+  return {
+    id: asString(raw.id, uid()),
+    listingId,
+    title: asString(raw.title, 'تحديث الإعلان'),
+    dueAt: asString(raw.dueAt) || now(),
+    status: status === 'completed' || status === 'done' ? 'completed' : status === 'due' ? 'due' : 'scheduled',
+  };
+}
+
+function notificationFromBackend(value: unknown): NotificationItem {
+  const raw = asObject(value);
+  const level = asString(raw.level) || asString(raw.type);
+  return {
+    id: asString(raw.id, uid()),
+    title: asString(raw.title, 'إشعار'),
+    body: asString(raw.body),
+    level: level === 'warning' || level === 'success' ? level : 'info',
+    createdAt: asString(raw.createdAt) || now(),
+    read: raw.read === true || Boolean(raw.readAt),
+  };
+}
+
 function notify() {
   listeners.forEach((listener) => listener());
 }
@@ -252,6 +329,9 @@ function persistSoon() {
       ...backendWorkspace,
       profile: { ...asObject(backendWorkspace.profile), name: state.profile.name },
       records: state.listings.map((listing) => listingToBackend(listing, previousById.get(listing.id))),
+      clients: state.contacts,
+      reminders: state.reminders.map((reminder) => ({ ...reminder, recordId: reminder.listingId })),
+      notifications: state.notifications,
       activities: state.activity,
       referenceShareLogs: state.shareLogs,
       referenceProfile: state.profile,
@@ -281,25 +361,54 @@ export function initializeDB(workspaceValue: unknown, user: BackendUser) {
   const clientsById = new Map(clients.map((client) => [asString(asObject(client).id), client]));
   const profileValue = asObject(backendWorkspace.referenceProfile);
   const backendProfile = asObject(backendWorkspace.profile);
+  const trashCutoff = Date.now() - 30 * 86400000;
+  const listings = records
+    .map((record) => listingFromBackend(record, clientsById.get(asString(asObject(record).clientId))))
+    .filter((listing) => !listing.deletedAt || new Date(listing.deletedAt).getTime() > trashCutoff);
+  const reminders = (Array.isArray(backendWorkspace.reminders) ? backendWorkspace.reminders : [])
+    .map(reminderFromBackend)
+    .filter((item): item is Reminder => item !== null);
+  const notifications = (Array.isArray(backendWorkspace.notifications) ? backendWorkspace.notifications : [])
+    .map(notificationFromBackend);
+
+  for (const listing of listings.filter((item) => !item.deletedAt && isOverdue(item))) {
+    if (!notifications.some((item) => item.body.includes(listing.id))) {
+      notifications.unshift({
+        id: uid(),
+        title: 'موعد تحديث الإعلان',
+        body: `حان موعد مراجعة "${listing.title}". [${listing.id}]`,
+        level: 'warning',
+        createdAt: now(),
+        read: false,
+      });
+    }
+  }
+
   state = {
-    listings: records
-      .filter((record) => !asObject(record).deletedAt)
-      .map((record) => listingFromBackend(record, clientsById.get(asString(asObject(record).clientId)))),
+    listings,
+    contacts: clients.map(contactFromBackend),
+    reminders,
+    notifications,
     shareLogs: Array.isArray(backendWorkspace.referenceShareLogs) ? (backendWorkspace.referenceShareLogs as ShareLog[]) : [],
     activity: Array.isArray(backendWorkspace.activities) ? backendWorkspace.activities.map(activityFromBackend) : [],
     profile: {
       ...emptyProfile,
       ...profileValue,
       name: user.name || asString(backendProfile.name, emptyProfile.name),
+      email: user.email,
+      role: user.role,
+      timezone: user.timezone || 'Asia/Riyadh',
       phone: user.phone || asString(profileValue.phone),
       falLicense: user.falLicense || asString(profileValue.falLicense, 'غير مضاف'),
       tier: user.role === 'admin' ? 'ذهبي 🥇' : asString(profileValue.tier, 'وسيط نشط'),
-      referralCode: asString(profileValue.referralCode) || `BROKER-${user.id.slice(-4).toUpperCase()}`,
+      referralCode: user.referralCode || asString(profileValue.referralCode) || `BROKER-${user.id.slice(-4).toUpperCase()}`,
+      defaultReminderDays: reminderDays(profileValue.defaultReminderDays),
       apiKeys: {},
     },
   };
   initialized = true;
   notify();
+  persistSoon();
 }
 
 function subscribe(callback: () => void) {
@@ -314,7 +423,7 @@ export function useDB(): DBShape {
 export const getProfile = () => state.profile;
 
 export const isOverdue = (listing: Listing): boolean => {
-  if (listing.status === 'archived' || listing.status === 'closed' || listing.status === 'fulfilled') return false;
+  if (listing.deletedAt || listing.status === 'archived' || listing.status === 'closed' || listing.status === 'fulfilled') return false;
   return Date.now() - new Date(listing.lastRefreshedAt).getTime() > listing.refreshIntervalDays * 86400000;
 };
 
@@ -327,12 +436,18 @@ function logActivity(current: DBShape, type: ActivityType, detail: string, listi
   return [{ id: uid(), type, detail, listingId, listingTitle, createdAt: now() }, ...current.activity].slice(0, 300);
 }
 
+function dueAtFrom(date: string, days: number): string {
+  return new Date(new Date(date).getTime() + days * 86400000).toISOString();
+}
+
 export const db = {
   addListing(input: Omit<Listing, 'id' | 'createdAt' | 'updatedAt' | 'lastRefreshedAt'> & { lastRefreshedAt?: string }): string {
     const id = uid();
+    const createdAt = now();
     setState((current) => ({
       ...current,
-      listings: [{ ...input, id, lastRefreshedAt: input.lastRefreshedAt ?? now(), createdAt: now(), updatedAt: now() }, ...current.listings],
+      listings: [{ ...input, id, lastRefreshedAt: input.lastRefreshedAt ?? createdAt, createdAt, updatedAt: createdAt }, ...current.listings],
+      reminders: [{ id: uid(), listingId: id, title: 'تحديث الإعلان', dueAt: dueAtFrom(createdAt, input.refreshIntervalDays), status: 'scheduled' }, ...current.reminders],
       activity: logActivity(current, 'created', `تمت إضافة ${input.kind === 'offer' ? 'عرض' : 'طلب'} جديد`, id, input.title),
     }));
     return id;
@@ -349,30 +464,85 @@ export const db = {
   refreshListing(id: string) {
     setState((current) => {
       const listing = current.listings.find((item) => item.id === id);
-      return { ...current, listings: current.listings.map((item) => item.id === id ? { ...item, lastRefreshedAt: now(), updatedAt: now() } : item), activity: logActivity(current, 'refreshed', 'تم التحديث وأعيد ضبط مؤقت المتابعة', id, listing?.title) };
+      const refreshedAt = now();
+      return {
+        ...current,
+        listings: current.listings.map((item) => item.id === id ? { ...item, lastRefreshedAt: refreshedAt, updatedAt: refreshedAt } : item),
+        reminders: current.reminders.map((item) => item.listingId === id ? { ...item, dueAt: dueAtFrom(refreshedAt, listing?.refreshIntervalDays ?? 14), status: 'scheduled' } : item),
+        notifications: current.notifications.map((item) => item.body.includes(`[${id}]`) ? { ...item, read: true } : item),
+        activity: logActivity(current, 'refreshed', 'تم التحديث وأعيد ضبط مؤقت المتابعة', id, listing?.title),
+      };
     });
   },
   archiveListing(id: string, reason: ArchiveReason, commission?: Commission) {
-    setState((current) => ({ ...current, listings: current.listings.map((listing) => listing.id === id ? { ...listing, status: reason === 'sold_by_me' ? (listing.kind === 'offer' ? 'closed' : 'fulfilled') : 'archived', archivedAt: now(), archiveReason: reason, commission, updatedAt: now() } : listing), activity: logActivity(current, 'archived', 'تمت أرشفة الإعلان', id) }));
+    setState((current) => ({ ...current, listings: current.listings.map((listing) => listing.id === id ? { ...listing, status: reason === 'sold_by_me' ? (listing.kind === 'offer' ? 'closed' : 'fulfilled') : 'archived', archivedAt: now(), archiveReason: reason, commission, updatedAt: now() } : listing), reminders: current.reminders.map((item) => item.listingId === id ? { ...item, status: 'completed' } : item), activity: logActivity(current, 'archived', 'تمت أرشفة الإعلان', id) }));
   },
   restoreListing(id: string) {
     setState((current) => ({ ...current, listings: current.listings.map((listing) => listing.id === id ? { ...listing, status: listing.kind === 'offer' ? 'for_sale' : 'buy', archivedAt: undefined, archiveReason: undefined, lastRefreshedAt: now(), updatedAt: now() } : listing), activity: logActivity(current, 'restored', 'تمت استعادة الإعلان', id) }));
   },
   deleteListing(id: string) {
-    setState((current) => ({ ...current, listings: current.listings.filter((listing) => listing.id !== id) }));
+    setState((current) => {
+      const listing = current.listings.find((item) => item.id === id);
+      return {
+        ...current,
+        listings: current.listings.map((item) => item.id === id ? { ...item, deletedAt: now(), updatedAt: now() } : item),
+        reminders: current.reminders.map((item) => item.listingId === id ? { ...item, status: 'completed' } : item),
+        activity: logActivity(current, 'updated', 'نُقل الإعلان إلى سلة المحذوفات لمدة 30 يوماً', id, listing?.title),
+      };
+    });
+  },
+  restoreDeletedListing(id: string) {
+    setState((current) => ({
+      ...current,
+      listings: current.listings.map((listing) => listing.id === id ? { ...listing, deletedAt: undefined, updatedAt: now() } : listing),
+      activity: logActivity(current, 'restored', 'تمت استعادة الإعلان من سلة المحذوفات', id),
+    }));
+  },
+  deleteListingPermanently(id: string) {
+    setState((current) => ({ ...current, listings: current.listings.filter((listing) => listing.id !== id), reminders: current.reminders.filter((item) => item.listingId !== id) }));
+  },
+  addContact(input: Omit<Contact, 'id' | 'lastContactAt'>) {
+    setState((current) => ({ ...current, contacts: [{ ...input, id: uid(), lastContactAt: now() }, ...current.contacts], activity: logActivity(current, 'updated', `تمت إضافة جهة الاتصال ${input.name}`) }));
+  },
+  updateReminder(id: string, status: Reminder['status']) {
+    setState((current) => ({ ...current, reminders: current.reminders.map((item) => item.id === id ? { ...item, status } : item) }));
+  },
+  addReminder(listingId: string) {
+    setState((current) => {
+      const listing = current.listings.find((item) => item.id === listingId);
+      if (!listing) return current;
+      return { ...current, reminders: [{ id: uid(), listingId, title: 'متابعة العرض / الطلب', dueAt: dueAtFrom(now(), listing.refreshIntervalDays), status: 'scheduled' }, ...current.reminders] };
+    });
+  },
+  markAllNotificationsRead() {
+    setState((current) => ({ ...current, notifications: current.notifications.map((item) => ({ ...item, read: true })) }));
   },
   addShareLog(log: Omit<ShareLog, 'id' | 'createdAt'>) {
     setState((current) => ({ ...current, shareLogs: [{ ...log, id: uid(), createdAt: now() }, ...current.shareLogs], activity: logActivity(current, 'shared', `مشاركة عبر ${log.platform === 'whatsapp' ? 'واتساب' : 'منصة X'}`, log.listingId, log.listingTitle) }));
   },
   updateProfile(patch: Partial<Profile>) {
-    setState((current) => ({ ...current, profile: { ...current.profile, ...patch, apiKeys: {} } }));
-    if (patch.name !== undefined || patch.falLicense !== undefined) {
-      void fetch('/api/auth/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: patch.name, falLicense: patch.falLicense }) });
+    let updatedProfile = state.profile;
+    setState((current) => {
+      updatedProfile = { ...current.profile, ...patch, apiKeys: {} };
+      return { ...current, profile: updatedProfile };
+    });
+    if (patch.name !== undefined || patch.phone !== undefined || patch.falLicense !== undefined) {
+      void fetch('/api/auth/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: updatedProfile.name,
+          phone: updatedProfile.phone,
+          falLicense: updatedProfile.falLicense,
+          timezone: updatedProfile.timezone,
+        }),
+      });
     }
   },
   resetAll() {
-    setState((current) => ({ ...current, listings: [], shareLogs: [], activity: [] }));
+    setState((current) => ({ ...current, listings: [], contacts: [], reminders: [], notifications: [], shareLogs: [], activity: [] }));
   },
 };
 
-export const listingsByKind = (listings: Listing[], kind: ListingKind) => listings.filter((listing) => listing.kind === kind);
+export const activeListings = (listings: Listing[]) => listings.filter((listing) => !listing.deletedAt);
+export const listingsByKind = (listings: Listing[], kind: ListingKind) => listings.filter((listing) => !listing.deletedAt && listing.kind === kind);

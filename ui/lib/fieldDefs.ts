@@ -3,7 +3,7 @@ import type { PropertyType } from '@/ui/types';
 export interface FieldDef {
   key: string;
   label: string;
-  input: 'number' | 'text' | 'boolean' | 'select';
+  input: 'number' | 'text' | 'boolean' | 'select' | 'multiselect';
   options?: string[];
   unit?: string;
   placeholder?: string;
@@ -14,12 +14,28 @@ export interface FieldDef {
 // الحقول المشتركة لكل الأنواع
 export const COMMON_FIELDS: FieldDef[] = [
   { key: 'area', label: 'المساحة', input: 'number', unit: 'م²' },
+  { key: 'bedrooms', label: 'عدد الغرف', input: 'number' },
+  { key: 'bathrooms', label: 'عدد دورات المياه', input: 'number' },
+  { key: 'age', label: 'عمر العقار', input: 'number', unit: 'سنة' },
+  { key: 'frontages', label: 'الواجهات', input: 'multiselect', options: ['شمالية', 'جنوبية', 'شرقية', 'غربية'] },
+  { key: 'streetWidth', label: 'عرض الشارع', input: 'number', unit: 'م' },
+];
+
+export const REQUEST_FIELDS: FieldDef[] = [
+  { key: 'preferredDistricts', label: 'الأحياء المطلوبة', input: 'text', placeholder: 'العارض، النرجس' },
+  { key: 'areaMin', label: 'المساحة من', input: 'number', unit: 'م²' },
+  { key: 'areaMax', label: 'المساحة إلى', input: 'number', unit: 'م²' },
+  { key: 'minimumBedrooms', label: 'الحد الأدنى للغرف', input: 'number' },
+  { key: 'maxAge', label: 'العمر الأقصى', input: 'number', unit: 'سنة' },
+  { key: 'targetMeterPrice', label: 'سعر المتر المستهدف', input: 'number', unit: 'ر.س' },
+  { key: 'preferredFrontages', label: 'الواجهات المفضلة', input: 'multiselect', options: ['شمالية', 'جنوبية', 'شرقية', 'غربية'] },
+  { key: 'technicalRequirements', label: 'المواصفات الفنية المطلوبة', input: 'text' },
 ];
 
 const LAND: FieldDef[] = [
   { key: 'area', label: 'المساحة', input: 'number', unit: 'م²' },
   { key: 'meterPrice', label: 'سعر المتر', input: 'number', unit: 'ر.س' },
-  { key: 'frontage', label: 'الواجهة', input: 'select', options: ['شمالية', 'جنوبية', 'شرقية', 'غربية', 'شمالية شرقية', 'شمالية غربية', 'جنوبية شرقية', 'جنوبية غربية', 'ركنية'] },
+  { key: 'frontages', label: 'الواجهات', input: 'multiselect', options: ['شمالية', 'جنوبية', 'شرقية', 'غربية'] },
   { key: 'lengths', label: 'الأطوال', input: 'text', placeholder: '20×30' },
   { key: 'streetWidth', label: 'عرض الشارع', input: 'number', unit: 'م' },
   { key: 'planNo', label: 'رقم المخطط', input: 'text' },
@@ -77,11 +93,23 @@ const OTHER: FieldDef[] = [
   { key: 'streetWidth', label: 'عرض الشارع', input: 'number', unit: 'م' },
 ];
 
+const COMMERCIAL_UNIT: FieldDef[] = [
+  { key: 'area', label: 'المساحة', input: 'number', unit: 'م²' },
+  { key: 'streetWidth', label: 'عرض الشارع', input: 'number', unit: 'م' },
+  { key: 'age', label: 'عمر العقار', input: 'number', unit: 'سنة' },
+  { key: 'annualIncome', label: 'الدخل السنوي', input: 'number', unit: 'ر.س' },
+];
+
 export const TYPE_FIELDS: Record<PropertyType, FieldDef[]> = {
   land: LAND,
   villa: VILLA,
   apartment: APARTMENT,
   building: BUILDING,
+  block: LAND,
+  warehouse: COMMERCIAL_UNIT,
+  rest_house: OTHER,
+  office: COMMERCIAL_UNIT,
+  shop: COMMERCIAL_UNIT,
   farm: FARM,
   tower: TOWER,
   other: OTHER,
@@ -111,7 +139,7 @@ export function summaryChips(
   if (sw) chips.push(`شارع ${sw}م`);
   const age = num('age');
   if (age !== undefined) chips.push(`العمر ${age}`);
-  if (str('frontage')) chips.push(`واجهة ${str('frontage')}`);
+  if (str('frontages') || str('frontage')) chips.push(`واجهة ${str('frontages') ?? str('frontage')}`);
   if (str('stairType')) chips.push(`درج ${str('stairType')}`);
   if (num('floors')) chips.push(`${num('floors')} أدوار`);
   if (num('treesCount')) chips.push(`${fmt(num('treesCount')!)} شجرة`);

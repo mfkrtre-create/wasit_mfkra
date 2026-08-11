@@ -81,6 +81,7 @@ export default function Home() {
           name: String(form.get('name') || ''),
           phone: String(form.get('phone') || ''),
           falLicense: String(form.get('falLicense') || ''),
+          referralCode: String(form.get('referralCode') || ''),
         };
       } else if (mode === 'confirm') {
         endpoint = '/api/auth/confirm-email';
@@ -172,6 +173,7 @@ export default function Home() {
             )}
             {mode === 'register' && <AuthInput name="phone" label="رقم الجوال" type="tel" autoComplete="tel" required />}
             {mode === 'register' && <AuthInput name="falLicense" label="رخصة فال (اختياري)" />}
+            {mode === 'register' && <AuthInput name="referralCode" label="كود الإحالة (اختياري)" />}
             {mode === 'login' && <AuthInput name="identifier" label="البريد أو الجوال" autoComplete="username" required />}
             {(mode === 'login' || mode === 'register' || mode === 'reset') && (
               <AuthInput name="password" label={mode === 'reset' ? 'كلمة المرور الجديدة' : 'كلمة المرور'} type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={8} required />

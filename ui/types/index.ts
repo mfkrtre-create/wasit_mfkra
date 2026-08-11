@@ -5,9 +5,16 @@ export type PropertyType =
   | 'villa' // فيلا
   | 'apartment' // شقة
   | 'building' // عمارة
+  | 'block' // بلك
+  | 'warehouse' // مستودع
+  | 'rest_house' // استراحة
+  | 'office' // مكتب
+  | 'shop' // محل
   | 'farm' // مزرعة
   | 'tower' // برج
-  | 'other'; // استراحة / مكتب / محل
+  | 'other';
+
+export type PropertyCategory = 'residential' | 'commercial' | 'industrial' | 'agricultural';
 
 export type ListingKind = 'offer' | 'request';
 
@@ -46,6 +53,7 @@ export interface Listing {
   kind: ListingKind;
   status: ListingStatus;
   propertyType: PropertyType;
+  category?: PropertyCategory;
   title: string;
   city: string;
   district: string;
@@ -66,13 +74,46 @@ export interface Listing {
   notes?: string;
   source: InputSource;
   rawText?: string;
-  refreshIntervalDays: 7 | 14 | 30;
+  refreshIntervalDays: number;
   lastRefreshedAt: string; // ISO
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string;
   archivedAt?: string;
   archiveReason?: ArchiveReason;
   commission?: Commission;
+}
+
+export type ContactType = 'owner' | 'buyer' | 'tenant' | 'broker';
+export type ContactPriority = 'high' | 'medium' | 'low';
+
+export interface Contact {
+  id: string;
+  name: string;
+  phone: string;
+  type: ContactType;
+  priority: ContactPriority;
+  notes: string;
+  lastContactAt: string;
+}
+
+export type ReminderStatus = 'scheduled' | 'due' | 'completed';
+
+export interface Reminder {
+  id: string;
+  listingId: string;
+  title: string;
+  dueAt: string;
+  status: ReminderStatus;
+}
+
+export interface NotificationItem {
+  id: string;
+  title: string;
+  body: string;
+  level: 'info' | 'warning' | 'success';
+  createdAt: string;
+  read: boolean;
 }
 
 export type SharePlatform = 'whatsapp' | 'x';
@@ -81,6 +122,9 @@ export interface ShareOptions {
   showPrice: boolean;
   showBrokerNumber: boolean;
   showBidInstead: boolean; // إظهار السوم بدل الحد
+  includeArea: boolean;
+  includeMap: boolean;
+  includeImage: boolean;
   includeQuickLink: boolean;
 }
 
@@ -118,11 +162,15 @@ export interface ActivityLog {
 
 export interface Profile {
   name: string;
+  email: string;
+  role: 'admin' | 'broker';
+  timezone: string;
   falLicense: string;
   tier: string;
   phone: string;
   city: string;
   referralCode: string;
+  defaultReminderDays: number;
   apiKeys: {
     mapbox?: string;
     whatsappBusiness?: string;
@@ -133,6 +181,9 @@ export interface Profile {
 
 export interface DBShape {
   listings: Listing[];
+  contacts: Contact[];
+  reminders: Reminder[];
+  notifications: NotificationItem[];
   shareLogs: ShareLog[];
   activity: ActivityLog[];
   profile: Profile;
@@ -143,9 +194,21 @@ export const PROPERTY_TYPE_LABELS: Record<PropertyType, string> = {
   villa: 'فيلا',
   apartment: 'شقة',
   building: 'عمارة',
+  block: 'بلك',
+  warehouse: 'مستودع',
+  rest_house: 'استراحة',
+  office: 'مكتب',
+  shop: 'محل',
   farm: 'مزرعة',
   tower: 'برج',
-  other: 'استراحة / مكتب / محل',
+  other: 'أخرى',
+};
+
+export const PROPERTY_CATEGORY_LABELS: Record<PropertyCategory, string> = {
+  residential: 'سكني',
+  commercial: 'تجاري',
+  industrial: 'صناعي',
+  agricultural: 'زراعي',
 };
 
 export const OFFER_STATUS_LABELS: Record<OfferStatus, string> = {

@@ -26,6 +26,7 @@ function draftFromParsed(parsed: ParsedListing, source: 'whatsapp' | 'voice', ra
     kind: parsed.kind,
     status: parsed.status,
     propertyType: parsed.propertyType,
+    category: parsed.category,
     district: parsed.district,
     city: parsed.city || base.city,
     fields: parsed.fields,
@@ -34,6 +35,8 @@ function draftFromParsed(parsed: ParsedListing, source: 'whatsapp' | 'voice', ra
     rawText,
   };
   if ('adLicense' in parsed && typeof parsed.adLicense === 'string') draft.adLicense = parsed.adLicense;
+  if ('falLicense' in parsed && typeof parsed.falLicense === 'string') draft.falLicense = parsed.falLicense;
+  if ('category' in parsed && typeof parsed.category === 'string') draft.category = parsed.category;
   if ('notes' in parsed && typeof parsed.notes === 'string') draft.notes = parsed.notes;
   if ('contactNumber' in parsed && typeof parsed.contactNumber === 'string') {
     if (draft.kind === 'offer') draft.ownerPhone = parsed.contactNumber;

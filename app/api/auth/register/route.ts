@@ -14,6 +14,7 @@ const schema = z.object({
   name: z.string().trim().min(1).max(120),
   phone: z.string().trim().min(7).max(32),
   falLicense: z.string().trim().max(80).optional().or(z.literal("")),
+  referralCode: z.string().trim().max(40).optional().or(z.literal("")),
 });
 
 function normalizePhone(phone: string) {
@@ -46,11 +47,11 @@ export async function POST(request: Request) {
   const result = await getDb()
     .query(
       `
-        insert into app_users (email, username, phone, name, fal_license, password_hash, email_confirmed_at)
-        values ($1, $2, $3, $4, $5, $6, null)
-        returning id, email, username, phone, name, role, timezone, fal_license, email_confirmed_at
+        insert into app_users (email, username, phone, name, fal_license, password_hash, email_confirmed_at, referred_by)
+        values ($1, $2, $3, $4, $5, $6, null, (select id from app_users where upper(referral_code) = upper($7) limit 1))
+        returning id, email, username, phone, name, role, timezone, fal_license, email_confirmed_at, referral_code
       `,
-      [email, username, phone, parsed.data.name, parsed.data.falLicense || "", passwordHash],
+      [email, username, phone, parsed.data.name, parsed.data.falLicense || "", passwordHash, parsed.data.referralCode || ""],
     )
     .catch((error: unknown) => {
       if (typeof error === "object" && error && "code" in error && error.code === "23505") {

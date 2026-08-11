@@ -8,6 +8,11 @@ const TYPE_EMOJI: Record<string, string> = {
   villa: '🏡',
   apartment: '🏢',
   building: '🏬',
+  block: '🧱',
+  warehouse: '🏭',
+  rest_house: '🏝️',
+  office: '🏢',
+  shop: '🏪',
   farm: '🌴',
   tower: '🏙️',
   other: '🏪',
@@ -23,7 +28,7 @@ export function buildShareMessage(listing: Listing, opts: ShareOptions, profile:
   lines.push(`${emoji} ${typeLabel} ${status} — ${listing.district ? `حي ${listing.district}` : listing.city}`);
   lines.push('━━━━━━━━━━━━━━');
 
-  const chips = summaryChips(listing.propertyType, listing.fields);
+  const chips = summaryChips(listing.propertyType, listing.fields).filter((chip) => opts.includeArea || !chip.includes('م²'));
   if (chips.length > 0) lines.push(`📐 ${chips.join(' • ')}`);
 
   if (opts.showPrice) {
@@ -37,6 +42,7 @@ export function buildShareMessage(listing: Listing, opts: ShareOptions, profile:
   }
 
   if (listing.notes) lines.push(`📝 ${listing.notes}`);
+  if (opts.includeMap && listing.lat !== undefined && listing.lng !== undefined) lines.push(`📍 الموقع: https://www.google.com/maps?q=${listing.lat},${listing.lng}`);
   lines.push('━━━━━━━━━━━━━━');
 
   if (opts.showBrokerNumber) {

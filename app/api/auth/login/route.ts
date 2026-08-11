@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   const phone = normalizePhone(identifier);
   const result = await getDb().query(
     `
-      select id, email, username, phone, name, role, timezone, fal_license, password_hash, email_confirmed_at
+      select id, email, username, phone, name, role, timezone, fal_license, password_hash, email_confirmed_at, is_active, referral_code
       from app_users
       where lower(email) = lower($1)
         or lower(username) = lower($1)
@@ -38,6 +38,7 @@ export async function POST(request: Request) {
   if (!row || !(await verifyPassword(parsed.data.password, String(row.password_hash)))) {
     return NextResponse.json({ error: "تعذر تسجيل الدخول. تأكد من البريد وكلمة المرور." }, { status: 401 });
   }
+  if (!row.is_active) return NextResponse.json({ error: 'الحساب معطل. راجع إدارة المنصة.' }, { status: 403 });
 
   if (requireEmailConfirmation() && !row.email_confirmed_at) {
     return NextResponse.json({ error: "أكد بريدك الإلكتروني أولاً ثم سجّل الدخول." }, { status: 403 });
@@ -55,6 +56,7 @@ export async function POST(request: Request) {
       timezone: String(row.timezone || "Asia/Riyadh"),
       falLicense: String(row.fal_license || ""),
       emailConfirmed: Boolean(row.email_confirmed_at),
+      referralCode: String(row.referral_code || ''),
     },
     message: "تم تسجيل الدخول بنجاح.",
   });

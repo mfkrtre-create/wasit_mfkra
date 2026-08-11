@@ -31,21 +31,24 @@ export function Dashboard() {
   const { listings, activity, profile } = useDB();
   const { openQuickAdd, setViewingListing } = useApp();
 
-  const offers = listings.filter((l) => l.kind === 'offer' && l.status !== 'archived' && l.status !== 'closed');
-  const requests = listings.filter((l) => l.kind === 'request' && l.status !== 'archived' && l.status !== 'fulfilled');
-  const overdue = listings.filter(isOverdue);
+  const activeListings = listings.filter((l) => !l.deletedAt);
+  const offers = activeListings.filter((l) => l.kind === 'offer' && l.status !== 'archived' && l.status !== 'closed');
+  const requests = activeListings.filter((l) => l.kind === 'request' && l.status !== 'archived' && l.status !== 'fulfilled');
+  const totalOffers = activeListings.filter((l) => l.kind === 'offer').length;
+  const totalRequests = activeListings.filter((l) => l.kind === 'request').length;
+  const overdue = activeListings.filter(isOverdue);
   const thisMonth = monthKey(new Date().toISOString());
-  const monthCommission = listings
+  const monthCommission = activeListings
     .filter((l) => l.commission && monthKey(l.commission.date) === thisMonth)
     .reduce((sum, l) => sum + (l.commission?.amount ?? 0), 0);
-  const totalCommission = listings.reduce((sum, l) => sum + (l.commission?.amount ?? 0), 0);
+  const totalCommission = activeListings.reduce((sum, l) => sum + (l.commission?.amount ?? 0), 0);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'صباح الخير' : hour < 17 ? 'مساء الخير' : 'مساء النور';
 
   const kpis = [
-    { label: 'عروض نشطة', value: offers.length, icon: Tag, tone: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/25', to: '/offers' },
-    { label: 'طلبات نشطة', value: requests.length, icon: Inbox, tone: 'text-violet-300 bg-violet-500/10 border-violet-500/25', to: '/requests' },
+    { label: `عروض نشطة من ${totalOffers}`, value: offers.length, icon: Tag, tone: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/25', to: '/offers' },
+    { label: `طلبات نشطة من ${totalRequests}`, value: requests.length, icon: Inbox, tone: 'text-violet-300 bg-violet-500/10 border-violet-500/25', to: '/requests' },
     { label: 'تحتاج تحديث', value: overdue.length, icon: AlarmClock, tone: 'text-red-300 bg-red-500/10 border-red-500/25', to: '/' },
     { label: 'عمولة الشهر', value: fmtMoney(monthCommission), icon: Banknote, tone: 'text-[#e5bc55] bg-[#c9972f]/10 border-[#c9972f]/25', to: '/account' },
   ];
@@ -170,13 +173,13 @@ export function Dashboard() {
             </Link>
           </div>
           <div className="space-y-3">
-            {listings
+            {activeListings
               .filter((l) => l.status !== 'archived')
               .slice(0, 3)
               .map((l) => (
                 <ListingCard key={l.id} listing={l} onView={setViewingListing} />
               ))}
-            {listings.filter((l) => l.status !== 'archived').length === 0 && (
+            {activeListings.filter((l) => l.status !== 'archived').length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-8">لا توجد إعلانات بعد — أضف أول إعلان ⚡</p>
             )}
           </div>

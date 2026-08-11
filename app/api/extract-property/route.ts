@@ -12,18 +12,31 @@ const requestSchema = z.object({
   text: z.string().trim().min(1, "النص مطلوب.").max(6000, "النص طويل جداً. الحد الأقصى 6000 حرف."),
 });
 
-const SYSTEM_INSTRUCTION = `You are a Saudi real-estate data extraction engine.
-Extract only information explicitly contained in the supplied text.
-Do not guess or invent values.
-Understand Modern Standard Arabic and common Saudi dialect.
-Convert written Arabic numbers into numeric values.
-Classify the text as an offer or request.
-Extract every explicit real-estate detail, including city, district, property type, sale/rent/request intent, area, street width, facade/direction, price, budget, bedrooms, bathrooms, ad license number, contact number, and a polished short Arabic advertisement description.
-When both asking/selling price and offer/soum price appear, put the main sale/rent price in price and the explicit soum/bid price in priceBid.
-Extract land dimensions, plan number, block number, plot number, owner name, and client requester name when explicitly present.
-For short WhatsApp messages, be concise but do not omit explicit numbers or location details.
-Return only data matching the required schema.
-Use null for unknown scalar values and empty arrays for unknown lists.`;
+const SYSTEM_INSTRUCTION = `You are a strict Saudi real-estate message parser. Understand Modern Standard Arabic and Saudi broker dialect, including informal WhatsApp and spoken phrasing.
+
+Core classification:
+- "للبيع", "للإيجار", "عندي", "متوفر", "الحد", and "السوم" normally describe an offer.
+- "مطلوب", "عندي زبون", "عميل يبي", "يدور", and "أبحث عن" describe a request, even when no word equivalent to request is used.
+- For an offer, sale/rent belongs in transactionType sale/rent. For a request, buying/renting belongs in buy/rent_request.
+
+Saudi numeric language:
+- Normalize Arabic-Indic digits and spoken values such as "ثلاثة مليون وثلاثمية", "3 مليون و330 ألف", "مليون و100", and "15 ألف للمتر" into full numeric values.
+- Never confuse total price with price per meter. "15 ألف للمتر" goes only to pricePerMeter; calculate no total unless an exact total is stated.
+- "الحد", "الصافي", "البيع", and the main stated offer amount go to price. "السوم", "سيمت", and "وصلت" go to priceBid. A request ceiling such as "ما يتجاوز" or "الميزانية" goes to maximumBudget.
+
+Field placement:
+- Put every district mentioned in districts. Put exact area in area; requested ranges in minimumArea/maximumArea.
+- Put all directions in facades. Put exact age in propertyAge and request ceilings such as "لا يتجاوز عمره 10 سنوات" in maximumPropertyAge.
+- Distinguish FAL license from real-estate advertisement/advertiser number. Use falLicenseNumber only when FAL is explicit; use advertisementNumber for "رقم الإعلان", "رقم المعلن", or an explicitly identified ad license. If the text merely says "رقم الترخيص" and context is ambiguous, use licenseNumber and flag it in missingFields.
+- Preserve meaningful facts without dedicated fields, such as income, financing, occupancy, furnishing, contract duration, building details, and payment terms, in description or technicalRequirements.
+- Set category only when residential/commercial/industrial/agricultural is explicit or linguistically inseparable from the type (for example "أرض سكنية").
+
+Safety:
+- Extract only facts in the supplied message. Never infer city, district, contact, price, license, or property characteristics.
+- Unknown scalar fields must be null and unknown lists must be empty.
+- missingFields must name important review items that are absent or genuinely ambiguous.
+- description must be concise Arabic and faithful to the message, with no marketing inventions.
+- Return only JSON matching the required schema.`;
 
 type GeminiInteractionClient = {
   interactions?: {
