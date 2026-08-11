@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Image from 'next/image';
 import {
   Share2,
   Archive,
@@ -45,6 +46,7 @@ export function ListingDetails() {
   const listingShares = shareLogs.filter((s) => s.listingId === listing.id);
   const listingActivity = activity.filter((a) => a.listingId === listing.id).slice(0, 10);
   const headline = listing.priceMode === 'bid' ? listing.priceBid : listing.priceAsk;
+  const mainImage = listing.images.find((image) => image.main) ?? listing.images[0];
 
   const fieldRows = TYPE_FIELDS[listing.propertyType]
     .filter((f) => listing.fields[f.key] !== undefined && listing.fields[f.key] !== '' && listing.fields[f.key] !== false)
@@ -78,6 +80,23 @@ export function ListingDetails() {
           </SheetHeader>
 
           <div className="flex-1 overflow-y-auto scrollbar-thin px-5 py-4 space-y-5">
+            {mainImage && (
+              <section className="space-y-2">
+                <div className="relative aspect-[16/9] overflow-hidden rounded-2xl border border-border bg-secondary/40">
+                  <Image src={mainImage.url} alt={mainImage.name} fill sizes="(min-width: 640px) 32rem, 100vw" unoptimized className="object-cover" />
+                </div>
+                {listing.images.length > 1 && (
+                  <div className="grid grid-cols-4 gap-2">
+                    {listing.images.slice(0, 8).map((image) => (
+                      <div key={image.id} className="relative aspect-square overflow-hidden rounded-xl border border-border bg-secondary/40">
+                        <Image src={image.url} alt={image.name} fill sizes="6rem" unoptimized className="object-cover" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
             {/* price hero */}
             <div className="rounded-2xl navy-gradient border border-[#c9972f]/30 p-4">
               <div className="flex items-end justify-between">

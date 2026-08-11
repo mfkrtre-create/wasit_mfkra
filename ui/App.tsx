@@ -7,6 +7,7 @@ import { ListingsPage } from '@/ui/pages/ListingsPage';
 import { MapPage } from '@/ui/pages/MapPage';
 import { ContactsPage } from '@/ui/pages/ContactsPage';
 import { AccountPage } from '@/ui/pages/AccountPage';
+import { DocumentsPage } from '@/ui/pages/DocumentsPage';
 import { ListingDetails } from '@/ui/components/ListingDetails';
 import { useDB } from '@/ui/lib/db';
 
@@ -41,6 +42,7 @@ function AppInner() {
           <Route path="requests" element={<ListingsPage kind="request" />} />
           <Route path="map" element={<MapPage />} />
           <Route path="contacts" element={<ContactsPage />} />
+          <Route path="documents" element={<DocumentsPage />} />
           <Route path="account" element={<AccountPage />} />
           <Route path="listing/:id" element={<ListingDeepLink />} />
           <Route path="*" element={<Navigate to="/" replace />} />

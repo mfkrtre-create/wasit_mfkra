@@ -3,6 +3,7 @@ import { Keyboard, MessageSquareText, Mic, MicOff, ArrowRight, Save, Sparkles, C
 import { useApp } from '@/ui/context/AppContext';
 import { db } from '@/ui/lib/db';
 import { parseListingText, type ParsedListing } from '@/ui/lib/parser';
+import { extractPropertyWithServerAI, parsedListingFromServerAI, transcribeWithServerAI } from '@/ui/lib/server-ai';
 import { PROPERTY_TYPE_LABELS, type Listing } from '@/ui/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/ui/components/ui/dialog';
 import { cn } from '@/ui/lib/utils';
@@ -32,6 +33,16 @@ function draftFromParsed(parsed: ParsedListing, source: 'whatsapp' | 'voice', ra
     priceAmbiguous: parsed.priceAmbiguous,
     rawText,
   };
+  if ('adLicense' in parsed && typeof parsed.adLicense === 'string') draft.adLicense = parsed.adLicense;
+  if ('notes' in parsed && typeof parsed.notes === 'string') draft.notes = parsed.notes;
+  if ('contactNumber' in parsed && typeof parsed.contactNumber === 'string') {
+    if (draft.kind === 'offer') draft.ownerPhone = parsed.contactNumber;
+    else draft.clientPhone = parsed.contactNumber;
+  }
+  if ('contactName' in parsed && typeof parsed.contactName === 'string') {
+    if (draft.kind === 'offer') draft.ownerName = parsed.contactName;
+    else draft.clientName = parsed.contactName;
+  }
   if (parsed.priceBid !== undefined) draft.priceBid = parsed.priceBid;
   if (parsed.priceAsk !== undefined) draft.priceAsk = parsed.priceAsk;
   draft.title = autoTitle(draft);
@@ -50,7 +61,11 @@ export function QuickAddModal() {
   const [voiceText, setVoiceText] = useState('');
   const [listening, setListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(true);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiProgress, setAiProgress] = useState('');
   const recognitionRef = useRef<{ stop: () => void } | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   // reset when opened
   useEffect(() => {
@@ -64,56 +79,87 @@ export function QuickAddModal() {
       setPasteText('');
       setVoiceText('');
       setListening(false);
-      const w = window as unknown as Record<string, unknown>;
-      setVoiceSupported(Boolean(w.SpeechRecognition || w.webkitSpeechRecognition));
+      setAiBusy(false);
+      setAiProgress('');
+      setVoiceSupported(typeof navigator.mediaDevices?.getUserMedia === 'function' && typeof window.MediaRecorder === 'function');
     }
   }, [quickAddOpen, quickAddDefaultKind]);
 
-  const startVoice = () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const w = window as unknown as Record<string, any>;
-    const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
-    if (!SR) {
+  const startVoice = async () => {
+    if (typeof navigator.mediaDevices?.getUserMedia !== 'function' || typeof window.MediaRecorder !== 'function') {
       setVoiceSupported(false);
       return;
     }
-    const rec = new SR();
-    rec.lang = 'ar-SA';
-    rec.continuous = true;
-    rec.interimResults = true;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rec.onresult = (e: any) => {
-      let finalText = '';
-      for (let i = 0; i < e.results.length; i++) {
-        if (e.results[i].isFinal) finalText += e.results[i][0].transcript + ' ';
-        else finalText += e.results[i][0].transcript + ' ';
-      }
-      setVoiceText(finalText.trim());
-    };
-    rec.onerror = () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : undefined });
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((track) => track.stop());
+        const audio = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+        void transcribeAndAnalyze(audio);
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setListening(true);
+      setAiProgress('جاري التسجيل...');
+    } catch {
       setListening(false);
-      toast.error('تعذر الاستماع — تحقق من صلاحية المايكروفون');
-    };
-    rec.onend = () => setListening(false);
-    recognitionRef.current = rec;
-    rec.start();
-    setListening(true);
+      toast.error('تعذر الوصول إلى المايكروفون');
+    }
   };
 
   const stopVoice = () => {
     recognitionRef.current?.stop();
+    mediaRecorderRef.current?.stop();
     setListening(false);
   };
 
-  const analyze = (text: string, source: 'whatsapp' | 'voice') => {
+  const analyze = async (text: string, source: 'whatsapp' | 'voice') => {
     if (!text.trim()) {
       toast.error('النص فارغ — أدخل نص الإعلان أولاً');
       return;
     }
-    const p = parseListingText(text);
-    setParsed(p);
-    setDraft(draftFromParsed(p, source, text, quickAddDefaultKind));
-    setStep('review');
+    setAiBusy(true);
+    setAiProgress(source === 'voice' ? 'يتم تحليل التفريغ عبر Gemini...' : 'يتم تحليل النص عبر Gemini...');
+    try {
+      const serverData = await extractPropertyWithServerAI(text);
+      const p = parsedListingFromServerAI(serverData, quickAddDefaultKind);
+      setParsed(p);
+      setDraft(draftFromParsed(p, source, text, quickAddDefaultKind));
+      setStep('review');
+      toast.success('تم تحليل الإعلان عبر AI');
+    } catch (error) {
+      const p = parseListingText(text);
+      setParsed(p);
+      setDraft(draftFromParsed(p, source, text, quickAddDefaultKind));
+      setStep('review');
+      toast.warning(error instanceof Error ? `${error.message} — تم استخدام المحلل المحلي للمراجعة.` : 'تم استخدام المحلل المحلي للمراجعة.');
+    } finally {
+      setAiBusy(false);
+      setAiProgress('');
+    }
+  };
+
+  const transcribeAndAnalyze = async (audio: Blob) => {
+    if (audio.size <= 0) {
+      toast.error('التسجيل فارغ.');
+      return;
+    }
+    setAiBusy(true);
+    setAiProgress('يتم تحويل الصوت إلى نص عبر Groq Whisper...');
+    try {
+      const text = await transcribeWithServerAI(audio);
+      setVoiceText(text);
+      await analyze(text, 'voice');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'تعذر تحليل الصوت.');
+      setAiBusy(false);
+      setAiProgress('');
+    }
   };
 
   const save = () => {
@@ -189,7 +235,8 @@ export function QuickAddModal() {
                     className="w-full bg-secondary/50 border border-border rounded-xl px-3.5 py-3 text-sm text-white outline-none focus:border-[#c9972f]/60 resize-none leading-relaxed placeholder:text-muted-foreground/60"
                   />
                   <button
-                    onClick={() => analyze(pasteText, 'whatsapp')}
+                    disabled={aiBusy}
+                    onClick={() => void analyze(pasteText, 'whatsapp')}
                     className="w-full gold-gradient text-[#0f1f3d] font-extrabold rounded-xl py-3 flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.99] transition-all"
                   >
                     <Sparkles className="w-5 h-5" />
@@ -202,13 +249,13 @@ export function QuickAddModal() {
                 <div className="space-y-3 pt-1">
                   {!voiceSupported ? (
                     <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200 leading-relaxed">
-                      ⚠️ متصفحك لا يدعم الإدخال الصوتي (Web Speech API). يعمل حالياً على Chrome / Edge. يمكنك كتابة
-                      النص يدوياً أدناه وسيمر بنفس المحلل.
+                      ⚠️ متصفحك لا يدعم التسجيل الصوتي المباشر. يمكنك كتابة النص يدوياً أدناه وسيمر بنفس محلل Gemini.
                     </div>
                   ) : (
                     <div className="rounded-xl border border-border bg-secondary/40 p-4 text-center">
                       <button
-                        onClick={listening ? stopVoice : startVoice}
+                        disabled={aiBusy && !listening}
+                        onClick={listening ? stopVoice : () => void startVoice()}
                         className={cn(
                           'w-20 h-20 rounded-full mx-auto flex items-center justify-center transition-all shadow-xl',
                           listening
@@ -233,8 +280,10 @@ export function QuickAddModal() {
                     placeholder="سيظهر النص المفرّغ هنا — يمكنك تعديله قبل التحليل…"
                     className="w-full bg-secondary/50 border border-border rounded-xl px-3.5 py-3 text-sm text-white outline-none focus:border-[#c9972f]/60 resize-none leading-relaxed"
                   />
+                  {aiProgress && <p className="text-xs font-bold text-[#e5bc55] text-center">{aiProgress}</p>}
                   <button
-                    onClick={() => analyze(voiceText, 'voice')}
+                    disabled={aiBusy}
+                    onClick={() => void analyze(voiceText, 'voice')}
                     className="w-full gold-gradient text-[#0f1f3d] font-extrabold rounded-xl py-3 flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.99] transition-all"
                   >
                     <Sparkles className="w-5 h-5" />

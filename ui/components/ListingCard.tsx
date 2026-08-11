@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Image from 'next/image';
 import {
   MapPin,
   Share2,
@@ -108,6 +109,7 @@ export function ListingCard({ listing, onView }: { listing: Listing; onView: (l:
   const chips = summaryChips(listing.propertyType, listing.fields);
   const contactName = listing.kind === 'offer' ? listing.ownerName : listing.clientName;
   const contactPhone = listing.kind === 'offer' ? listing.ownerPhone : listing.clientPhone;
+  const mainImage = listing.images.find((image) => image.main) ?? listing.images[0];
 
   const refreshMsg = buildRefreshMessage(listing, getProfile());
 
@@ -121,6 +123,11 @@ export function ListingCard({ listing, onView }: { listing: Listing; onView: (l:
           archived && 'opacity-60 grayscale-[0.6]',
         )}
       >
+        {mainImage && (
+          <div className="relative mb-3 aspect-[16/9] overflow-hidden rounded-xl border border-border bg-secondary/40">
+            <Image src={mainImage.url} alt={mainImage.name} fill sizes="(min-width: 768px) 30vw, 100vw" unoptimized className="object-cover" />
+          </div>
+        )}
         {/* overdue red strip */}
         {overdue && (
           <div className="absolute -top-2.5 right-4 flex items-center gap-1 bg-red-500 text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-lg">

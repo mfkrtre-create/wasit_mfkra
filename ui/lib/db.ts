@@ -67,6 +67,24 @@ function asListingFields(value: unknown): Listing['fields'] {
   );
 }
 
+function asPropertyImages(value: unknown): Listing['images'] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const image = asObject(item);
+      const id = asString(image.id);
+      const url = asString(image.url);
+      if (!id || !url) return null;
+      return {
+        id,
+        url,
+        name: asString(image.name, 'property-image'),
+        main: image.main === true,
+      };
+    })
+    .filter((item): item is Listing['images'][number] => item !== null);
+}
+
 function propertyTypeFromBackend(value: unknown): Listing['propertyType'] {
   const type = asString(value).toLowerCase();
   if (type.includes('villa') || type.includes('فيلا')) return 'villa';
@@ -130,6 +148,7 @@ function listingFromBackend(rawValue: unknown, clientValue?: unknown): Listing {
     ownerPhone: asString(raw.ownerPhone) || asString(raw.contact),
     clientName: asString(raw.clientName) || asString(client.name),
     clientPhone: asString(raw.clientPhone) || asString(client.phone) || (kind === 'request' ? asString(raw.contact) : ''),
+    images: asPropertyImages(raw.images),
     notes: asString(raw.notes),
     source: raw.source === 'ai-text' ? 'whatsapp' : raw.source === 'ai-voice' ? 'voice' : 'manual',
     rawText: asString(raw.rawText) || undefined,
@@ -185,6 +204,7 @@ function listingToBackend(listing: Listing, previousValue: unknown): JsonRecord 
     ownerPhone: listing.ownerPhone ?? '',
     clientName: listing.clientName ?? '',
     clientPhone: listing.clientPhone ?? '',
+    images: listing.images,
     falLicense: listing.falLicense ?? '',
     contact: listing.kind === 'offer' ? listing.ownerPhone ?? '' : listing.clientPhone ?? '',
     license: listing.adLicense ?? '',

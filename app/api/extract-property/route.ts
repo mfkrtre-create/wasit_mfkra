@@ -19,7 +19,8 @@ Understand Modern Standard Arabic and common Saudi dialect.
 Convert written Arabic numbers into numeric values.
 Classify the text as an offer or request.
 Extract every explicit real-estate detail, including city, district, property type, sale/rent/request intent, area, street width, facade/direction, price, budget, bedrooms, bathrooms, ad license number, contact number, and a polished short Arabic advertisement description.
-When both asking/selling price and offer/soum price appear, put the main sale/rent price in price and mention the offer/soum price in description.
+When both asking/selling price and offer/soum price appear, put the main sale/rent price in price and the explicit soum/bid price in priceBid.
+Extract land dimensions, plan number, block number, plot number, owner name, and client requester name when explicitly present.
 For short WhatsApp messages, be concise but do not omit explicit numbers or location details.
 Return only data matching the required schema.
 Use null for unknown scalar values and empty arrays for unknown lists.`;

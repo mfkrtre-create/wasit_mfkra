@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
-import { AlertTriangle, MapPin } from 'lucide-react';
-import type { InputSource, ListingKind, PriceMode, PropertyType } from '@/ui/types';
+import { useMemo, useState } from 'react';
+import Image from 'next/image';
+import { AlertTriangle, Image as ImageIcon, MapPin, Star, Trash2, UploadCloud } from 'lucide-react';
+import type { InputSource, ListingKind, PriceMode, PropertyImage, PropertyType } from '@/ui/types';
 import { OFFER_STATUS_LABELS, PROPERTY_TYPE_LABELS, REQUEST_STATUS_LABELS } from '@/ui/types';
 import { TYPE_FIELDS, type FieldDef } from '@/ui/lib/fieldDefs';
 import { landMeterFromTotal, landTotalFromMeter } from '@/ui/lib/parser';
@@ -8,6 +9,7 @@ import { getProfile } from '@/ui/lib/db';
 import { cn } from '@/ui/lib/utils';
 import { Switch } from '@/ui/components/ui/switch';
 import { MapPicker } from '@/ui/components/MapPicker';
+import { toast } from 'sonner';
 
 export interface Draft {
   kind: ListingKind;
@@ -30,6 +32,7 @@ export interface Draft {
   ownerPhone?: string;
   clientName?: string;
   clientPhone?: string;
+  images: PropertyImage[];
   notes?: string;
   source: InputSource;
   rawText?: string;
@@ -46,6 +49,7 @@ export const emptyDraft = (kind: ListingKind, source: InputSource): Draft => ({
   district: '',
   priceMode: 'ask',
   fields: {},
+  images: [],
   falLicense: getProfile().falLicense,
   source,
   refreshIntervalDays: 14,
@@ -136,6 +140,8 @@ function FieldInput({
 }
 
 export function DraftEditor({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => void }) {
+  const [uploadingImages, setUploadingImages] = useState(false);
+
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => {
     const next = { ...draft, [key]: value };
     if (!next.titleTouched && ['propertyType', 'status', 'district', 'kind'].includes(key as string)) {
@@ -173,6 +179,36 @@ export function DraftEditor({ draft, onChange }: { draft: Draft; onChange: (d: D
   }, [draft.propertyType, draft.fields]);
 
   const isRequest = draft.kind === 'request';
+
+  const uploadImages = async (files: FileList | null) => {
+    const selected = Array.from(files ?? []);
+    if (selected.length === 0) return;
+    setUploadingImages(true);
+    try {
+      const uploaded: PropertyImage[] = [];
+      for (const file of selected) {
+        const formData = new FormData();
+        formData.set('image', file);
+        const response = await fetch('/api/property-images', { method: 'POST', body: formData });
+        const body = (await response.json().catch(() => null)) as { image?: PropertyImage; error?: string } | null;
+        if (!response.ok || !body?.image) {
+          throw new Error(body?.error || 'تعذر رفع الصورة.');
+        }
+        uploaded.push(body.image);
+      }
+      const alreadyHasMain = draft.images.some((image) => image.main);
+      const nextImages = [...draft.images, ...uploaded].map((image, index) => ({
+        ...image,
+        main: alreadyHasMain ? image.main : index === 0,
+      }));
+      onChange({ ...draft, images: nextImages });
+      toast.success('تم رفع صور العقار');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'تعذر رفع الصور.');
+    } finally {
+      setUploadingImages(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -416,6 +452,67 @@ export function DraftEditor({ draft, onChange }: { draft: Draft; onChange: (d: D
         {!draft.lat && (
           <p className="text-[11px] font-semibold text-red-300/90 bg-red-500/10 border border-red-500/20 rounded-lg px-2.5 py-1.5">
             يجب تثبيت الدبوس على الخريطة قبل الحفظ — استخدم البحث أو زر «GPS — أنا هنا».
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-bold text-muted-foreground flex items-center gap-1">
+            <ImageIcon className="w-3.5 h-3.5 text-[#c9972f]" />
+            صور العقار
+          </span>
+          <label className="inline-flex items-center gap-1.5 rounded-xl border border-[#c9972f]/35 bg-[#c9972f]/10 px-3 py-2 text-xs font-extrabold text-[#e5bc55] hover:bg-[#c9972f]/20 transition-colors cursor-pointer">
+            <UploadCloud className="w-4 h-4" />
+            {uploadingImages ? 'جاري الرفع...' : 'رفع صور'}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+              className="hidden"
+              disabled={uploadingImages}
+              onChange={(event) => {
+                void uploadImages(event.target.files);
+                event.target.value = '';
+              }}
+            />
+          </label>
+        </div>
+        {draft.images.length > 0 ? (
+          <div className="grid grid-cols-3 gap-2">
+            {draft.images.map((image) => (
+              <div key={image.id} className="relative overflow-hidden rounded-xl border border-border bg-secondary/40 aspect-[4/3]">
+                <Image src={image.url} alt={image.name} fill sizes="8rem" unoptimized className="object-cover" />
+                <div className="absolute inset-x-1.5 top-1.5 flex items-center justify-between gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onChange({ ...draft, images: draft.images.map((item) => ({ ...item, main: item.id === image.id })) })}
+                    className="rounded-lg bg-black/55 p-1.5 text-white hover:text-[#e5bc55]"
+                    title="تعيين كصورة رئيسية"
+                  >
+                    <Star className={image.main ? 'w-3.5 h-3.5 fill-[#e5bc55] text-[#e5bc55]' : 'w-3.5 h-3.5'} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const remaining = draft.images.filter((item) => item.id !== image.id);
+                      onChange({
+                        ...draft,
+                        images: remaining.some((item) => item.main) ? remaining : remaining.map((item, index) => ({ ...item, main: index === 0 })),
+                      });
+                    }}
+                    className="rounded-lg bg-black/55 p-1.5 text-red-300 hover:text-red-200"
+                    title="حذف من السجل"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[11px] font-semibold text-muted-foreground bg-secondary/30 border border-border rounded-lg px-2.5 py-2">
+            يمكن رفع صور JPG أو PNG أو WebP حتى 5MB لكل صورة. تحفظ الصور عبر API محمي لكل حساب.
           </p>
         )}
       </div>

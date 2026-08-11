@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation } from 'react-router';
-import { Home, Tag, Inbox, Map as MapIcon, Users, UserCircle, Plus, Building2 } from 'lucide-react';
+import { Home, Tag, Inbox, Map as MapIcon, Users, UserCircle, Plus, Building2, FileText } from 'lucide-react';
 import { useApp } from '@/ui/context/AppContext';
 import { useDB } from '@/ui/lib/db';
 import { isOverdue } from '@/ui/lib/db';
@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { to: '/requests', label: 'الطلبات', icon: Inbox },
   { to: '/map', label: 'الخريطة', icon: MapIcon },
   { to: '/contacts', label: 'العملاء', icon: Users },
+  { to: '/documents', label: 'documents', icon: FileText },
   { to: '/account', label: 'حسابي', icon: UserCircle },
 ];
 
@@ -98,13 +99,14 @@ export function Layout() {
 
       {/* ===== Mobile: bottom navigation ===== */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#0c1a36]/95 backdrop-blur-lg border-t border-border pb-safe">
-        <div className="grid grid-cols-5 h-16">
+        <div className="grid grid-cols-6 h-16">
           {[
             NAV_ITEMS[0],
             NAV_ITEMS[1],
             NAV_ITEMS[2],
             NAV_ITEMS[3],
             NAV_ITEMS[5],
+            NAV_ITEMS[6],
           ].map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}

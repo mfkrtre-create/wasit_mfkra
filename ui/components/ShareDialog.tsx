@@ -3,6 +3,7 @@ import { MessageCircle, X as XIcon, Copy, Check } from 'lucide-react';
 import type { Listing, ShareOptions, SharePlatform } from '@/ui/types';
 import { db, useDB } from '@/ui/lib/db';
 import { buildShareMessage, xShareUrl } from '@/ui/lib/share';
+import { createPublicShare, defaultPublicShareOptions, revokePublicShare, type PublicShareLink } from '@/ui/lib/public-share';
 import { waLink } from '@/ui/lib/format';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/ui/components/ui/dialog';
 import { Checkbox } from '@/ui/components/ui/checkbox';
@@ -36,10 +37,30 @@ export function ShareDialog({
   const [recipientName, setRecipientName] = useState('');
   const [recipientPhone, setRecipientPhone] = useState('');
   const [copied, setCopied] = useState(false);
+  const [publicOpts, setPublicOpts] = useState(() => defaultPublicShareOptions(opts));
+  const [publicUrl, setPublicUrl] = useState('');
+  const [publicLinks, setPublicLinks] = useState<PublicShareLink[]>([]);
+  const [publicBusy, setPublicBusy] = useState(false);
 
-  const message = useMemo(() => buildShareMessage(listing, opts, profile), [listing, opts, profile]);
+  const message = useMemo(() => {
+    const base = buildShareMessage(listing, { ...opts, includeQuickLink: false }, profile);
+    return opts.includeQuickLink && publicUrl ? `${base}\n🔗 تصفح سريع: ${publicUrl}` : base;
+  }, [listing, opts, profile, publicUrl]);
 
-  const send = (platform: SharePlatform) => {
+  const ensurePublicUrl = async () => {
+    if (publicUrl) return publicUrl;
+    const result = await createPublicShare(listing, publicOpts);
+    setPublicUrl(result.url);
+    setPublicLinks((current) => [result.share, ...current]);
+    return result.url;
+  };
+
+  const send = async (platform: SharePlatform) => {
+    let finalMessage = message;
+    if (opts.includeQuickLink && !publicUrl) {
+      const url = await ensurePublicUrl();
+      finalMessage = `${buildShareMessage(listing, { ...opts, includeQuickLink: false }, profile)}\n🔗 تصفح سريع: ${url}`;
+    }
     db.addShareLog({
       listingId: listing.id,
       listingTitle: listing.title,
@@ -47,13 +68,25 @@ export function ShareDialog({
       recipientName: recipientName || (platform === 'whatsapp' ? 'جهة واتساب' : 'متابعو X'),
       recipientPhone: recipientPhone || undefined,
       platform,
-      message,
+      message: finalMessage,
       options: opts,
     });
-    const url = platform === 'whatsapp' ? waLink(recipientPhone || undefined, message) : xShareUrl(message);
+    const url = platform === 'whatsapp' ? waLink(recipientPhone || undefined, finalMessage) : xShareUrl(finalMessage);
     window.open(url, '_blank', 'noopener');
     toast.success(`تم فتح ${platform === 'whatsapp' ? 'واتساب' : 'X'} وسُجّلت المشاركة في سجل العملاء`);
     onOpenChange(false);
+  };
+
+  const createLink = async () => {
+    setPublicBusy(true);
+    try {
+      await ensurePublicUrl();
+      toast.success('تم إنشاء الرابط العام');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'تعذر إنشاء الرابط العام.');
+    } finally {
+      setPublicBusy(false);
+    }
   };
 
   const copy = async () => {
@@ -131,17 +164,92 @@ export function ShareDialog({
           </pre>
         </div>
 
+        <div className="mt-3 rounded-xl border border-[#c9972f]/20 bg-[#c9972f]/5 p-3.5 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <Label className="text-xs text-muted-foreground">رابط عام قابل للإلغاء</Label>
+            <select
+              value={publicOpts.expiresInDays ?? 'never'}
+              onChange={(event) =>
+                setPublicOpts((current) => ({
+                  ...current,
+                  expiresInDays: event.target.value === 'never' ? null : Number(event.target.value),
+                }))
+              }
+              className="rounded-lg border border-border bg-secondary/70 px-2 py-1.5 text-xs font-bold text-slate-200 outline-none"
+            >
+              <option value="30">30 يوم</option>
+              <option value="7">7 أيام</option>
+              <option value="90">90 يوم</option>
+              <option value="never">بدون انتهاء</option>
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              ['includePrice', 'السعر'],
+              ['includeAskingPrice', 'السوم'],
+              ['includeArea', 'المساحة'],
+              ['includeContact', 'التواصل'],
+              ['includeNotes', 'الملاحظات'],
+              ['includeMap', 'الخريطة'],
+            ].map(([key, label]) => (
+              <label key={key} className="flex items-center gap-2 text-xs font-bold text-slate-200">
+                <Checkbox
+                  checked={Boolean(publicOpts[key as keyof typeof publicOpts])}
+                  onCheckedChange={(v) => setPublicOpts((current) => ({ ...current, [key]: Boolean(v) }))}
+                  className="border-[#c9972f]/50 data-[state=checked]:bg-[#c9972f] data-[state=checked]:text-[#0f1f3d]"
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <Input readOnly value={publicUrl} placeholder="لم يتم إنشاء رابط عام بعد" className="bg-secondary/50 border-border text-xs nums-latin" />
+            <button
+              type="button"
+              disabled={publicBusy}
+              onClick={() => void createLink()}
+              className="rounded-xl border border-[#c9972f]/35 bg-[#c9972f]/15 px-3 text-xs font-extrabold text-[#e5bc55] hover:bg-[#c9972f]/25"
+            >
+              {publicBusy ? '...' : 'إنشاء'}
+            </button>
+          </div>
+          {publicLinks.length > 0 && (
+            <div className="space-y-1.5">
+              {publicLinks.map((link) => (
+                <div key={link.id} className="flex items-center justify-between gap-2 rounded-lg bg-secondary/40 border border-border px-2.5 py-2 text-xs">
+                  <span className="font-bold text-slate-200 truncate">{link.title}</span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await revokePublicShare(link.id);
+                        setPublicLinks((current) => current.map((item) => (item.id === link.id ? { ...item, revoked_at: new Date().toISOString() } : item)));
+                        toast.success('تم إلغاء الرابط');
+                      } catch (error) {
+                        toast.error(error instanceof Error ? error.message : 'تعذر إلغاء الرابط.');
+                      }
+                    }}
+                    className="font-extrabold text-red-300 hover:text-red-200"
+                  >
+                    {link.revoked_at ? 'ملغى' : 'إلغاء'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* actions */}
         <div className="grid grid-cols-2 gap-2.5 mt-4">
           <button
-            onClick={() => send('whatsapp')}
+            onClick={() => void send('whatsapp')}
             className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-3 transition-colors"
           >
             <MessageCircle className="w-5 h-5" />
             واتساب
           </button>
           <button
-            onClick={() => send('x')}
+            onClick={() => void send('x')}
             className="flex items-center justify-center gap-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-white font-extrabold py-3 transition-colors"
           >
             <XIcon className="w-5 h-5" />

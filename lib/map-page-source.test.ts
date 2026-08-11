@@ -59,11 +59,15 @@ describe('reference frontend integration', () => {
 
   it('uses the reference three-mode quick add and review workflow', () => {
     const quickAdd = source('ui', 'components', 'quick-add', 'QuickAddModal.tsx');
+    const editor = source('ui', 'components', 'quick-add', 'DraftEditor.tsx');
     expect(quickAdd).toContain('إدخال يدوي');
     expect(quickAdd).toContain('لصق واتساب');
     expect(quickAdd).toContain('إدخال صوتي');
     expect(quickAdd).toContain('مراجعة قبل الحفظ');
     expect(quickAdd).toContain('db.addListing');
+    expect(quickAdd).toContain('extractPropertyWithServerAI');
+    expect(quickAdd).toContain('transcribeWithServerAI');
+    expect(editor).toContain('/api/property-images');
   });
 
   it('uses the reference dynamic property fields and mandatory map picker', () => {
@@ -96,7 +100,22 @@ describe('reference frontend integration', () => {
     expect(adapter).toContain("fetch('/api/workspace'");
     expect(adapter).toContain("method: 'PUT'");
     expect(adapter).toContain('records: state.listings.map');
+    expect(adapter).toContain('images: listing.images');
     expect(adapter).not.toContain('localStorage');
+  });
+
+  it('restores public share links and documents inside the reference app', () => {
+    const app = source('ui', 'App.tsx');
+    const layout = source('ui', 'components', 'Layout.tsx');
+    const shareDialog = source('ui', 'components', 'ShareDialog.tsx');
+    const documents = source('ui', 'pages', 'DocumentsPage.tsx');
+    const documentsApi = source('app', 'api', 'documents', 'route.ts');
+    expect(app).toContain('DocumentsPage');
+    expect(layout).toContain('/documents');
+    expect(shareDialog).toContain('createPublicShare');
+    expect(shareDialog).toContain('revokePublicShare');
+    expect(documents).toContain('/api/documents');
+    expect(documentsApi).toContain('requireAuthenticatedRequest()');
   });
 
   it('keeps AI and image server actions authenticated', () => {

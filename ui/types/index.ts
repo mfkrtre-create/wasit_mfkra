@@ -34,6 +34,13 @@ export interface Commission {
   dealPrice: number;
 }
 
+export interface PropertyImage {
+  id: string;
+  url: string;
+  name: string;
+  main: boolean;
+}
+
 export interface Listing {
   id: string;
   kind: ListingKind;
@@ -55,6 +62,7 @@ export interface Listing {
   ownerPhone?: string;
   clientName?: string; // العميل (requests)
   clientPhone?: string;
+  images: PropertyImage[];
   notes?: string;
   source: InputSource;
   rawText?: string;

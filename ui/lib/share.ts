@@ -39,9 +39,6 @@ export function buildShareMessage(listing: Listing, opts: ShareOptions, profile:
   if (listing.notes) lines.push(`📝 ${listing.notes}`);
   lines.push('━━━━━━━━━━━━━━');
 
-  if (opts.includeQuickLink) {
-    lines.push(`🔗 تصفح سريع: ${window.location.origin}/listing/${listing.id}`);
-  }
   if (opts.showBrokerNumber) {
     lines.push(`📞 الوسيط: ${profile.name} — ${profile.phone}`);
     lines.push(`🪪 رخصة فال: ${profile.falLicense}`);
