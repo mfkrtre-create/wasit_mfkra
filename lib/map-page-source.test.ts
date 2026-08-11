@@ -104,17 +104,21 @@ describe('reference frontend integration', () => {
     expect(adapter).not.toContain('localStorage');
   });
 
-  it('restores public share links while keeping requirement documents out of the product UI', () => {
+  it('exposes authenticated project documents in the reference UI', () => {
     const app = source('ui', 'App.tsx');
     const layout = source('ui', 'components', 'Layout.tsx');
     const shareDialog = source('ui', 'components', 'ShareDialog.tsx');
-    expect(app).not.toContain('DocumentsPage');
-    expect(layout).not.toContain('/documents');
+    const documentsPage = source('ui', 'pages', 'DocumentsPage.tsx');
+    const documentsApi = source('app', 'api', 'documents', 'route.ts');
+    expect(app).toContain('DocumentsPage');
+    expect(layout).toContain('/documents');
+    expect(documentsPage).toContain("fetch('/api/documents'");
+    expect(documentsApi).toContain('requireAuthenticatedRequest()');
     expect(shareDialog).toContain('createPublicShare');
     expect(shareDialog).toContain('revokePublicShare');
     expect(existsSync(join(process.cwd(), 'documents'))).toBe(true);
-    expect(existsSync(join(process.cwd(), 'ui', 'pages', 'DocumentsPage.tsx'))).toBe(false);
-    expect(existsSync(join(process.cwd(), 'app', 'api', 'documents', 'route.ts'))).toBe(false);
+    expect(existsSync(join(process.cwd(), 'ui', 'pages', 'DocumentsPage.tsx'))).toBe(true);
+    expect(existsSync(join(process.cwd(), 'app', 'api', 'documents', 'route.ts'))).toBe(true);
   });
 
   it('keeps AI and image server actions authenticated', () => {
