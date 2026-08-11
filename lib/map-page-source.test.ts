@@ -98,6 +98,11 @@ describe('reference frontend integration', () => {
     expect(contacts).toContain('مراسلة واتساب');
     expect(account).toContain('إحصائيات الأداء والصفقات');
     expect(account).toContain('رخصة فال');
+    expect(account).toContain('createPublicShare');
+    expect(account).toContain('buildShareMessage');
+    expect(account).toContain('اختيار سجل للمشاركة');
+    expect(account).toContain('إنشاء رابط عام');
+    expect(account).toContain('نص المشاركة');
   });
 
   it('persists reference mutations through the authenticated backend workspace', () => {

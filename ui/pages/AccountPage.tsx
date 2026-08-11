@@ -4,18 +4,25 @@ import {
   Banknote,
   Bell,
   CalendarClock,
+  Check,
+  ClipboardCopy,
+  Copy,
   Gift,
   Link2,
   LogOut,
+  MessageCircle,
   RotateCcw,
   Save,
+  Send,
+  Share2,
   Trash2,
   UserCircle,
   XCircle,
 } from 'lucide-react';
 import { db, useDB } from '@/ui/lib/db';
-import { fmtDate, fmtDateTime, fmtMoney, monthKey, monthLabel } from '@/ui/lib/format';
-import { revokePublicShare, type PublicShareLink } from '@/ui/lib/public-share';
+import { fmtDate, fmtDateTime, fmtMoney, monthKey, monthLabel, waLink } from '@/ui/lib/format';
+import { buildShareMessage, xShareUrl } from '@/ui/lib/share';
+import { createPublicShare, revokePublicShare, type PublicShareLink, type PublicShareOptions } from '@/ui/lib/public-share';
 import { cn } from '@/ui/lib/utils';
 import { toast } from 'sonner';
 
@@ -37,6 +44,21 @@ export function AccountPage() {
   const [fal, setFal] = useState(profile.falLicense);
   const [links, setLinks] = useState<PublicShareLink[]>([]);
   const [linksBusy, setLinksBusy] = useState(false);
+  const [selectedShareId, setSelectedShareId] = useState('');
+  const [publicUrl, setPublicUrl] = useState('');
+  const [shareMessage, setShareMessage] = useState('');
+  const [shareBusy, setShareBusy] = useState(false);
+  const [copiedShare, setCopiedShare] = useState(false);
+  const [publicOptions, setPublicOptions] = useState<PublicShareOptions>({
+    includePrice: true,
+    includeAskingPrice: true,
+    includeArea: true,
+    includeContact: false,
+    includeNotes: false,
+    includeMap: true,
+    includeImage: false,
+    expiresInDays: 30,
+  });
 
   const active = useMemo(() => listings.filter((item) => !item.deletedAt), [listings]);
   const trashed = useMemo(() => listings.filter((item) => item.deletedAt), [listings]);
@@ -54,6 +76,23 @@ export function AccountPage() {
   }, [deals]);
   const maxMonth = Math.max(1, ...monthly.map(([, value]) => value));
   const total = deals.reduce((sum, deal) => sum + deal.commission!.amount, 0);
+  const selectedShareRecord = active.find((listing) => listing.id === selectedShareId) ?? active[0] ?? null;
+  const currentShareText = selectedShareRecord
+    ? buildShareMessage(
+        selectedShareRecord,
+        {
+          showPrice: publicOptions.includePrice,
+          showBrokerNumber: publicOptions.includeContact,
+          showBidInstead: publicOptions.includeAskingPrice,
+          includeArea: publicOptions.includeArea,
+          includeMap: publicOptions.includeMap,
+          includeImage: publicOptions.includeImage,
+          includeQuickLink: Boolean(publicUrl),
+        },
+        profile,
+      )
+    : '';
+  const textWithLink = publicUrl ? `${currentShareText}\n\nرابط التفاصيل: ${publicUrl}` : currentShareText;
 
   const loadLinks = () => {
     setLinksBusy(true);
@@ -72,6 +111,63 @@ export function AccountPage() {
     if (nextSection === 'sharing') loadLinks();
   };
 
+  const shareOptionsForLog = () => ({
+    showPrice: publicOptions.includePrice,
+    showBrokerNumber: publicOptions.includeContact,
+    showBidInstead: publicOptions.includeAskingPrice,
+    includeArea: publicOptions.includeArea,
+    includeMap: publicOptions.includeMap,
+    includeImage: publicOptions.includeImage,
+    includeQuickLink: Boolean(publicUrl),
+  });
+
+  const updatePublicOptions = (patch: Partial<PublicShareOptions>) => {
+    setPublicOptions((current) => ({ ...current, ...patch }));
+    setPublicUrl('');
+    setShareMessage('تم تحديث خيارات المشاركة. أنشئ رابطاً جديداً لتطبيق الخيارات.');
+  };
+
+  const createLink = async () => {
+    if (!selectedShareRecord) {
+      setShareMessage('أضف سجلاً أولاً حتى يمكن إنشاء رابط مشاركة.');
+      return;
+    }
+    setShareBusy(true);
+    setShareMessage('جاري إنشاء رابط المشاركة...');
+    try {
+      const result = await createPublicShare(selectedShareRecord, publicOptions);
+      setPublicUrl(result.url);
+      setLinks((current) => [result.share, ...current.filter((link) => link.id !== result.share.id)]);
+      setShareMessage('تم إنشاء رابط عام آمن لهذا السجل.');
+    } catch (error) {
+      setShareMessage(error instanceof Error ? error.message : 'تعذر إنشاء رابط المشاركة.');
+    } finally {
+      setShareBusy(false);
+    }
+  };
+
+  const logShare = (platform: 'whatsapp' | 'x', message: string) => {
+    if (!selectedShareRecord) return;
+    db.addShareLog({
+      listingId: selectedShareRecord.id,
+      listingTitle: selectedShareRecord.title,
+      listingKind: selectedShareRecord.kind,
+      recipientName: platform === 'whatsapp' ? 'جهة واتساب' : 'متابعو X',
+      platform,
+      message,
+      options: shareOptionsForLog(),
+    });
+  };
+
+  const copyShareText = async () => {
+    if (!textWithLink) return;
+    await navigator.clipboard?.writeText(textWithLink);
+    setCopiedShare(true);
+    setTimeout(() => setCopiedShare(false), 1500);
+    logShare('whatsapp', textWithLink);
+    toast.success('تم نسخ نص المشاركة');
+  };
+
   const saveProfile = () => {
     db.updateProfile({ name: name.trim() || profile.name, phone: phone.trim(), falLicense: fal.trim() });
     toast.success('تم حفظ بيانات الحساب');
@@ -81,6 +177,83 @@ export function AccountPage() {
     await fetch('/api/auth/logout', { method: 'POST' });
     window.location.reload();
   };
+
+  const renderSharing = () => (
+    <section className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+      <div className="rounded-2xl border border-border bg-card card-glow p-5 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-extrabold text-white flex items-center gap-2"><Share2 className="w-5 h-5 text-[#e5bc55]" />اختيار سجل للمشاركة</h2>
+          <button type="button" onClick={loadLinks} className="text-xs font-extrabold text-[#e5bc55]">تحديث الروابط</button>
+        </div>
+        {active.length > 0 ? (
+          <>
+            <label className="grid gap-1.5 text-xs font-bold text-muted-foreground">
+              السجل
+              <select value={selectedShareRecord?.id ?? ''} onChange={(event) => { setSelectedShareId(event.target.value); setPublicUrl(''); }} className="rounded-xl border border-border bg-[#0a1730] px-3 py-2.5 text-sm font-bold text-white outline-none">
+                {active.map((listing) => <option key={listing.id} value={listing.id}>{listing.title}</option>)}
+              </select>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                ['includePrice', 'إظهار السعر أو الميزانية'],
+                ['includeAskingPrice', 'إظهار السوم'],
+                ['includeArea', 'إظهار المساحة'],
+                ['includeContact', 'إظهار بيانات التواصل'],
+                ['includeNotes', 'إظهار الملاحظات'],
+                ['includeMap', 'إظهار الموقع'],
+                ['includeImage', 'إظهار صورة العقار'],
+              ].map(([key, label]) => (
+                <label key={key} className="flex items-center gap-2 rounded-xl border border-border bg-secondary/40 px-3 py-2 text-xs font-bold text-slate-200">
+                  <input type="checkbox" checked={Boolean(publicOptions[key as keyof PublicShareOptions])} onChange={(event) => updatePublicOptions({ [key]: event.target.checked } as Partial<PublicShareOptions>)} />
+                  {label}
+                </label>
+              ))}
+            </div>
+            <select value={publicOptions.expiresInDays ?? 'never'} onChange={(event) => updatePublicOptions({ expiresInDays: event.target.value === 'never' ? null : Number(event.target.value) })} className="w-full rounded-xl border border-border bg-[#0a1730] px-3 py-2.5 text-sm font-bold text-white outline-none">
+              <option value="7">صلاحية 7 أيام</option>
+              <option value="30">صلاحية 30 يوم</option>
+              <option value="90">صلاحية 90 يوم</option>
+              <option value="never">بدون انتهاء</option>
+            </select>
+            <button type="button" disabled={shareBusy} onClick={() => void createLink()} className="w-full gold-gradient rounded-xl py-3 font-extrabold text-[#0f1f3d] disabled:opacity-60">
+              {shareBusy ? 'جاري إنشاء الرابط...' : 'إنشاء رابط عام'}
+            </button>
+            {shareMessage && <p className="rounded-xl border border-[#c9972f]/25 bg-[#c9972f]/10 px-3 py-2 text-sm font-bold leading-7 text-slate-200">{shareMessage}</p>}
+            {publicUrl && (
+              <button type="button" onClick={() => void navigator.clipboard?.writeText(publicUrl)} className="w-full rounded-xl border border-[#c9972f]/35 bg-[#c9972f]/10 px-3 py-2 text-xs font-extrabold text-[#e5bc55] break-all">
+                <ClipboardCopy className="inline-block w-4 h-4 ms-1" />
+                نسخ الرابط العام
+              </button>
+            )}
+            <div className="grid grid-cols-3 gap-2">
+              <a href={waLink(undefined, textWithLink)} target="_blank" rel="noreferrer" onClick={() => logShare('whatsapp', textWithLink)} className="rounded-xl bg-emerald-600 px-3 py-2.5 text-center text-xs font-extrabold text-white"><MessageCircle className="inline-block w-4 h-4 ms-1" />واتساب</a>
+              <a href={xShareUrl(textWithLink)} target="_blank" rel="noreferrer" onClick={() => logShare('x', textWithLink)} className="rounded-xl border border-zinc-600 bg-zinc-800 px-3 py-2.5 text-center text-xs font-extrabold text-white"><Send className="inline-block w-4 h-4 ms-1" />X</a>
+              <button type="button" onClick={() => void copyShareText()} className="rounded-xl border border-border bg-secondary/50 px-3 py-2.5 text-xs font-extrabold text-slate-200">{copiedShare ? <Check className="inline-block w-4 h-4 ms-1 text-emerald-300" /> : <Copy className="inline-block w-4 h-4 ms-1" />}{copiedShare ? 'نُسخ' : 'نسخ النص'}</button>
+            </div>
+          </>
+        ) : <Empty text="أضف أول عرض أو طلب حتى تظهر أدوات المشاركة." />}
+      </div>
+
+      <div className="rounded-2xl border border-border bg-card card-glow p-5 space-y-4">
+        <h2 className="font-extrabold text-white">نص المشاركة</h2>
+        <pre className="min-h-64 max-h-80 overflow-y-auto whitespace-pre-wrap rounded-xl border border-[#c9972f]/20 bg-[#0a1730] p-4 text-sm leading-8 text-slate-100 font-[inherit] scrollbar-thin">
+          {textWithLink || 'اختر سجلاً لتجهيز نص المشاركة.'}
+        </pre>
+        <div className="flex items-center justify-between gap-2">
+          <p className="font-extrabold text-white">روابط تم إنشاؤها</p>
+          {linksBusy && <span className="text-xs font-bold text-muted-foreground">جاري التحميل...</span>}
+        </div>
+        <div className="space-y-2">
+          {!linksBusy && links.length ? links.slice(0, 8).map((link) => (
+            <div key={link.id} className="rounded-xl border border-border bg-secondary/40 p-3.5 flex flex-wrap items-center gap-3">
+              <div className="flex-1 min-w-48"><p className="font-bold text-white">{link.title}</p><p className="text-xs text-muted-foreground mt-1">{link.revoked_at ? 'ملغى' : link.expires_at ? `ينتهي ${fmtDateTime(link.expires_at)}` : 'بدون انتهاء'}</p></div>
+              {!link.revoked_at && <button onClick={async () => { await revokePublicShare(link.id); setLinks((current) => current.map((item) => item.id === link.id ? { ...item, revoked_at: new Date().toISOString() } : item)); }} className="text-xs font-extrabold text-red-300">إلغاء الرابط</button>}
+            </div>
+          )) : <Empty text="لم يتم إنشاء روابط عامة بعد." />}
+        </div>
+      </div>
+    </section>
+  );
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-5 md:py-8 space-y-5">
@@ -202,16 +375,7 @@ export function AccountPage() {
         </section>
       )}
 
-      {section === 'sharing' && (
-        <section className="rounded-2xl border border-border bg-card card-glow p-5 space-y-3">
-          {linksBusy ? <Empty text="جاري تحميل الروابط..." /> : links.length ? links.map((link) => (
-            <div key={link.id} className="rounded-xl border border-border bg-secondary/40 p-3.5 flex flex-wrap items-center gap-3">
-              <div className="flex-1 min-w-48"><p className="font-bold text-white">{link.title}</p><p className="text-xs text-muted-foreground mt-1">{link.revoked_at ? 'ملغى' : link.expires_at ? `ينتهي ${fmtDateTime(link.expires_at)}` : 'بدون انتهاء'}</p></div>
-              {!link.revoked_at && <button onClick={async () => { await revokePublicShare(link.id); setLinks((current) => current.map((item) => item.id === link.id ? { ...item, revoked_at: new Date().toISOString() } : item)); }} className="text-xs font-extrabold text-red-300">إلغاء الرابط</button>}
-            </div>
-          )) : <Empty text="لم يتم إنشاء روابط عامة بعد." />}
-        </section>
-      )}
+      {section === 'sharing' && renderSharing()}
 
       {section === 'trash' && (
         <section className="rounded-2xl border border-border bg-card card-glow p-5 space-y-3">
