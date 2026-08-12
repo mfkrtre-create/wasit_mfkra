@@ -23,6 +23,9 @@ export const propertySchema = z.object({
   licenseNumber: optionalText, falLicenseNumber: optionalText, advertisementNumber: optionalText,
   contactNumber: optionalText, description: optionalText, lengths: optionalText, planNumber: optionalText, blockNumber: optionalText, plotNumber: optionalText,
   ownerName: optionalText, clientName: optionalText, technicalRequirements: optionalText,
+  builtUpArea: optionalPositive, floors: optionalInteger, basementFloors: optionalInteger,
+  parkingPerBasement: optionalInteger, parkingTotal: optionalInteger, rentalOfferAmount: optionalNumber,
+  occupancyStatus: optionalText, finishing: optionalText, conversionPotential: optionalText, transferTaxNote: optionalText,
   missingFields: z.array(z.string().trim().min(1)), confidence: z.number().finite().min(0).max(1),
 });
 
@@ -35,6 +38,8 @@ export const defaultPropertyData: PropertyData = {
   bedrooms: null, minimumBedrooms: null, bathrooms: null, propertyAge: null, maximumPropertyAge: null,
   licenseNumber: null, falLicenseNumber: null, advertisementNumber: null, contactNumber: null, description: null,
   lengths: null, planNumber: null, blockNumber: null, plotNumber: null, ownerName: null, clientName: null, technicalRequirements: null,
+  builtUpArea: null, floors: null, basementFloors: null, parkingPerBasement: null, parkingTotal: null, rentalOfferAmount: null,
+  occupancyStatus: null, finishing: null, conversionPotential: null, transferTaxNote: null,
   missingFields: [], confidence: 0,
 };
 
@@ -62,7 +67,17 @@ export const propertyJsonSchema = {
     contactNumber: { ...nullableString }, description: { ...nullableString, description: 'Faithful concise Arabic summary retaining uncategorized facts.' },
     lengths: { ...nullableString }, planNumber: { ...nullableString }, blockNumber: { ...nullableString }, plotNumber: { ...nullableString },
     ownerName: { ...nullableString }, clientName: { ...nullableString }, technicalRequirements: { ...nullableString },
+    builtUpArea: { ...nullableNumber, description: 'Total built-up construction area / المسطحات البنائية.' },
+    floors: { ...nullableInteger, description: 'Number of above-ground floors.' },
+    basementFloors: { ...nullableInteger, description: 'Number of basement parking floors.' },
+    parkingPerBasement: { ...nullableInteger, description: 'Parking capacity per basement floor.' },
+    parkingTotal: { ...nullableInteger, description: 'Total parking capacity.' },
+    rentalOfferAmount: { ...nullableNumber, description: 'Explicit rental offer amount when the property is for sale but there is a rental offer.' },
+    occupancyStatus: { ...nullableString, description: 'Occupancy/rental status such as غير مؤجر حالياً.' },
+    finishing: { ...nullableString, description: 'Finishing/readiness condition such as تشطيب فاخر وجاهز للاستخدام.' },
+    conversionPotential: { ...nullableString, description: 'Explicit alternate use potential such as التحويل إلى فندق فاخر أو مقر رئيسي للشركات.' },
+    transferTaxNote: { ...nullableString, description: 'Explicit note about real-estate transaction tax/disposition requirements.' },
     missingFields: { type: 'array', items: { type: 'string' } }, confidence: { type: 'number', minimum: 0, maximum: 1 },
   },
-  required: ['recordType', 'transactionType', 'propertyType', 'customPropertyType', 'category', 'city', 'districts', 'area', 'minimumArea', 'maximumArea', 'streetWidth', 'facade', 'facades', 'price', 'priceBid', 'maximumBudget', 'pricePerMeter', 'targetPricePerMeter', 'priceType', 'bedrooms', 'minimumBedrooms', 'bathrooms', 'propertyAge', 'maximumPropertyAge', 'licenseNumber', 'falLicenseNumber', 'advertisementNumber', 'contactNumber', 'description', 'lengths', 'planNumber', 'blockNumber', 'plotNumber', 'ownerName', 'clientName', 'technicalRequirements', 'missingFields', 'confidence'],
+  required: ['recordType', 'transactionType', 'propertyType', 'customPropertyType', 'category', 'city', 'districts', 'area', 'minimumArea', 'maximumArea', 'streetWidth', 'facade', 'facades', 'price', 'priceBid', 'maximumBudget', 'pricePerMeter', 'targetPricePerMeter', 'priceType', 'bedrooms', 'minimumBedrooms', 'bathrooms', 'propertyAge', 'maximumPropertyAge', 'licenseNumber', 'falLicenseNumber', 'advertisementNumber', 'contactNumber', 'description', 'lengths', 'planNumber', 'blockNumber', 'plotNumber', 'ownerName', 'clientName', 'technicalRequirements', 'builtUpArea', 'floors', 'basementFloors', 'parkingPerBasement', 'parkingTotal', 'rentalOfferAmount', 'occupancyStatus', 'finishing', 'conversionPotential', 'transferTaxNote', 'missingFields', 'confidence'],
 } as const;

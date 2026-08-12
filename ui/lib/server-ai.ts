@@ -38,6 +38,16 @@ export type ServerPropertyData = {
   ownerName?: string | null;
   clientName?: string | null;
   technicalRequirements: string | null;
+  builtUpArea: number | null;
+  floors: number | null;
+  basementFloors: number | null;
+  parkingPerBasement: number | null;
+  parkingTotal: number | null;
+  rentalOfferAmount: number | null;
+  occupancyStatus: string | null;
+  finishing: string | null;
+  conversionPotential: string | null;
+  transferTaxNote: string | null;
   missingFields: string[];
   confidence: number;
 };
@@ -121,6 +131,16 @@ export function parsedListingFromServerAI(data: ServerPropertyData, fallbackKind
   if (data.customPropertyType) fields.customPropertyType = data.customPropertyType;
   if (data.districts.length > 1) fields.preferredDistricts = data.districts.join('، ');
   if (data.technicalRequirements) fields.technicalRequirements = data.technicalRequirements;
+  if (data.builtUpArea) fields.builtUpArea = data.builtUpArea;
+  if (data.floors) fields.floors = data.floors;
+  if (data.basementFloors) fields.basementFloors = data.basementFloors;
+  if (data.parkingPerBasement) fields.parkingPerBasement = data.parkingPerBasement;
+  if (data.parkingTotal) fields.parkingTotal = data.parkingTotal;
+  if (data.rentalOfferAmount) fields.rentalOfferAmount = data.rentalOfferAmount;
+  if (data.occupancyStatus) fields.occupancyStatus = data.occupancyStatus;
+  if (data.finishing) fields.finishing = data.finishing;
+  if (data.conversionPotential) fields.conversionPotential = data.conversionPotential;
+  if (data.transferTaxNote) fields.transferTaxNote = data.transferTaxNote;
 
   const confidence = [
     `AI Gemini: ثقة ${Math.round(data.confidence * 100)}%`,

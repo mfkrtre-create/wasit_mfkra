@@ -49,14 +49,20 @@ async function draftWithGoogleMapsPin(draft: Draft, rawText: string): Promise<Dr
   const direct = parseCoordinatesFromGoogleMapsUrl(mapUrl);
   if (direct) return { ...draft, lat: direct.lat, lng: direct.lng, fields: { ...draft.fields, googleMapsUrl: mapUrl } };
 
-  const response = await fetch('/api/resolve-map-url', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url: mapUrl }),
-  });
-  const body = (await response.json().catch(() => null)) as { lat?: number; lng?: number; resolvedUrl?: string } | null;
-  if (!response.ok || typeof body?.lat !== 'number' || typeof body.lng !== 'number') return { ...draft, fields: { ...draft.fields, googleMapsUrl: mapUrl } };
-  return { ...draft, lat: body.lat, lng: body.lng, fields: { ...draft.fields, googleMapsUrl: body.resolvedUrl ?? mapUrl } };
+  try {
+    const response = await fetch('/api/resolve-map-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: mapUrl }),
+    });
+    const body = (await response.json().catch(() => null)) as { lat?: number; lng?: number; resolvedUrl?: string } | null;
+    if (response.ok && typeof body?.lat === 'number' && typeof body.lng === 'number') {
+      return { ...draft, lat: body.lat, lng: body.lng, fields: { ...draft.fields, googleMapsUrl: body.resolvedUrl ?? mapUrl } };
+    }
+  } catch {
+    // Keep the listing usable even if Google short-link resolution is temporarily unavailable.
+  }
+  return { ...draft, fields: { ...draft.fields, googleMapsUrl: mapUrl } };
 }
 
 function draftFromParsed(parsed: ParsedListing, source: 'whatsapp' | 'voice', rawText: string, fallbackKind: 'offer' | 'request'): Draft {

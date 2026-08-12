@@ -66,11 +66,22 @@ const APARTMENT: FieldDef[] = [
 ];
 
 const BUILDING: FieldDef[] = [
+  { key: 'area', label: 'مساحة الأرض', input: 'number', unit: 'م²' },
+  { key: 'builtUpArea', label: 'المسطحات البنائية', input: 'number', unit: 'م²' },
+  { key: 'floors', label: 'عدد الأدوار', input: 'number' },
+  { key: 'basementFloors', label: 'أدوار البدروم', input: 'number' },
+  { key: 'parkingPerBasement', label: 'مواقف لكل بدروم', input: 'number' },
+  { key: 'parkingTotal', label: 'إجمالي المواقف', input: 'number' },
   { key: 'electricMeters', label: 'عدد عدادات الكهرباء', input: 'number' },
   { key: 'apartmentsCount', label: 'عدد الشقق', input: 'number' },
   { key: 'shopsCount', label: 'عدد المحلات', input: 'number' },
   { key: 'apartmentsIncome', label: 'الدخل السنوي للشقق', input: 'number', unit: 'ر.س' },
   { key: 'shopsIncome', label: 'الدخل السنوي للمحلات', input: 'number', unit: 'ر.س' },
+  { key: 'rentalOfferAmount', label: 'عرض الاستئجار', input: 'number', unit: 'ر.س' },
+  { key: 'occupancyStatus', label: 'حالة الإشغال', input: 'select', options: ['غير مؤجر حالياً', 'مؤجر', 'جاهز للاستخدام'] },
+  { key: 'finishing', label: 'التشطيب والجاهزية', input: 'text' },
+  { key: 'conversionPotential', label: 'قابلية التحويل / الاستخدام', input: 'text' },
+  { key: 'transferTaxNote', label: 'ملاحظة التصرفات العقارية', input: 'text' },
   { key: 'paymentDates', label: 'تاريخ الدفعات', input: 'text', placeholder: 'مثال: نصف سنوية' },
   { key: 'contractsRemaining', label: 'المدة المتبقية للعقود', input: 'text', placeholder: 'مثال: 8 - 20 شهر' },
 ];
@@ -97,7 +108,17 @@ const COMMERCIAL_UNIT: FieldDef[] = [
   { key: 'area', label: 'المساحة', input: 'number', unit: 'م²' },
   { key: 'streetWidth', label: 'عرض الشارع', input: 'number', unit: 'م' },
   { key: 'age', label: 'عمر العقار', input: 'number', unit: 'سنة' },
+  { key: 'builtUpArea', label: 'المسطحات البنائية', input: 'number', unit: 'م²' },
+  { key: 'floors', label: 'عدد الأدوار', input: 'number' },
+  { key: 'basementFloors', label: 'أدوار البدروم', input: 'number' },
+  { key: 'parkingPerBasement', label: 'مواقف لكل بدروم', input: 'number' },
+  { key: 'parkingTotal', label: 'إجمالي المواقف', input: 'number' },
   { key: 'annualIncome', label: 'الدخل السنوي', input: 'number', unit: 'ر.س' },
+  { key: 'rentalOfferAmount', label: 'عرض الاستئجار', input: 'number', unit: 'ر.س' },
+  { key: 'occupancyStatus', label: 'حالة الإشغال', input: 'select', options: ['غير مؤجر حالياً', 'مؤجر', 'جاهز للاستخدام'] },
+  { key: 'finishing', label: 'التشطيب والجاهزية', input: 'text' },
+  { key: 'conversionPotential', label: 'قابلية التحويل / الاستخدام', input: 'text' },
+  { key: 'transferTaxNote', label: 'ملاحظة التصرفات العقارية', input: 'text' },
 ];
 
 export const TYPE_FIELDS: Record<PropertyType, FieldDef[]> = {
@@ -142,6 +163,9 @@ export function summaryChips(
   if (str('frontages') || str('frontage')) chips.push(`واجهة ${str('frontages') ?? str('frontage')}`);
   if (str('stairType')) chips.push(`درج ${str('stairType')}`);
   if (num('floors')) chips.push(`${num('floors')} أدوار`);
+  if (num('builtUpArea')) chips.push(`مسطحات ${fmt(num('builtUpArea')!)} م²`);
+  if (num('parkingTotal')) chips.push(`${fmt(num('parkingTotal')!)} موقف`);
+  if (num('rentalOfferAmount')) chips.push(`عرض إيجار ${fmt(num('rentalOfferAmount')!)}`);
   if (num('treesCount')) chips.push(`${fmt(num('treesCount')!)} شجرة`);
   if (values['waterWell']) chips.push('بئر ماء');
   if (num('apartmentsCount')) chips.push(`${num('apartmentsCount')} شقة`);

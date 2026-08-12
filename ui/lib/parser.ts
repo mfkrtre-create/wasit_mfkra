@@ -165,6 +165,20 @@ export function parseListingText(raw: string): ParsedListing {
   if (treesMatch) fields.treesCount = parseInt(treesMatch[1], 10);
   const floorsMatch = flat.match(/(\d+)\s*(?:دور|ادوار|أدوار|طوابق|طابق)/);
   if (floorsMatch) fields.floors = parseInt(floorsMatch[1], 10);
+  const builtUpMatch = flat.match(/(?:المسطحات\s+البنائيه|مسطحات\s+بنائيه)[^0-9]{0,12}(\d[\d,]*)/);
+  if (builtUpMatch) fields.builtUpArea = toAmount(builtUpMatch[1]);
+  const basementMatch = flat.match(/(\d+)\s*(?:ادوار\s+)?بدروم/) || flat.match(/بدروم[^0-9]{0,12}(\d+)/);
+  if (basementMatch) fields.basementFloors = parseInt(basementMatch[1], 10);
+  const parkingPerBasementMatch = flat.match(/(?:سعه\s+)?المواقف[^0-9]{0,12}(\d+)\s*(?:سياره|سيارة)\s+لكل\s+بدروم/);
+  if (parkingPerBasementMatch) fields.parkingPerBasement = parseInt(parkingPerBasementMatch[1], 10);
+  const parkingTotalMatch = flat.match(/اجمالي\s*(\d+)\s*موقف/);
+  if (parkingTotalMatch) fields.parkingTotal = parseInt(parkingTotalMatch[1], 10);
+  if (/غير\s+مؤجر|غير\s+موجر/.test(flat)) fields.occupancyStatus = 'غير مؤجر حالياً';
+  if (/تشطيب\s+فاخر|جاهز\s+للاستخدام/.test(flat)) fields.finishing = 'تشطيب فاخر وجاهز للاستخدام';
+  const rentalOfferMatch = flat.match(/عرض\s+استئجار[^0-9]{0,16}(\d[\d,]*(?:\.\d+)?)\s*(مليون|ملايين|الف|ألف)?/);
+  if (rentalOfferMatch) fields.rentalOfferAmount = toAmount(rentalOfferMatch[1], rentalOfferMatch[2]);
+  if (/تحويله?\s+الى\s+فندق|مقر\s+رئيسي/.test(flat)) fields.conversionPotential = 'يصلح للتحويل إلى فندق فاخر أو مقر رئيسي للشركات';
+  if (/لا\s+يشترط\s+التصرفات\s+العقاريه/.test(flat)) fields.transferTaxNote = 'الإفراغ لا يشترط التصرفات العقارية';
 
   // ---- price: explicit سوم / حد keywords, multiplier must be adjacent ----
   let priceBid: number | undefined;
@@ -173,7 +187,7 @@ export function parseListingText(raw: string): ParsedListing {
   let priceAmbiguous = false;
 
   const bidMatch = flat.match(/(?:سوم|سيمت|وصلت|وصل|واصل|مسوم|سومت)[^0-9]{0,12}(\d[\d,]*(?:\.\d+)?)\s*(مليون|ملايين|الف|ألف)?/);
-  const askMatch = flat.match(/(?:حد|الصافي|صافي|فرص[هة])\s*[هة]?\s*[^0-9]{0,10}(\d[\d,]*(?:\.\d+)?)\s*(مليون|ملايين|الف|ألف)?/);
+  const askMatch = flat.match(/(?:حد|الصافي|صافي|سعر\s+البيع|البيع|فرص[هة])\s*[هة]?\s*[^0-9]{0,10}(\d[\d,]*(?:\.\d+)?)\s*(مليون|ملايين|الف|ألف)?/);
 
   if (bidMatch) {
     priceBid = toAmount(bidMatch[1], bidMatch[2]);
