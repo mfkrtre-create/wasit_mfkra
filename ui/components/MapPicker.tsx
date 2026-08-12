@@ -49,10 +49,12 @@ export function MapPicker({ value, onChange, onDistrictFound, height = 260 }: { 
         void reverseGeocode(point);
       });
       mapRef.current = map;
-      map.on('load', () => {
+      setMapReady(true);
+      window.setTimeout(() => map.resize(), 0);
+      map.once('load', () => {
         map.resize();
-        setMapReady(true);
       });
+      map.once('idle', () => map.resize());
     })();
     return () => { cancelled = true; markerRef.current?.remove(); markerRef.current = null; mapRef.current?.remove(); mapRef.current = null; };
     // Initialization must run only once; current callbacks are held in refs.
