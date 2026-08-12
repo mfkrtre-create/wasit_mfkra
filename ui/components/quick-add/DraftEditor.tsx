@@ -6,6 +6,7 @@ import { OFFER_STATUS_LABELS, PROPERTY_CATEGORY_LABELS, PROPERTY_TYPE_LABELS, RE
 import { COMMON_FIELDS, REQUEST_FIELDS, TYPE_FIELDS, type FieldDef } from '@/ui/lib/fieldDefs';
 import { landMeterFromTotal, landTotalFromMeter } from '@/ui/lib/parser';
 import { getProfile } from '@/ui/lib/db';
+import { formatInputNumber, parseInputNumber } from '@/ui/lib/format';
 import { cn } from '@/ui/lib/utils';
 import { Switch } from '@/ui/components/ui/switch';
 import { MapPicker } from '@/ui/components/MapPicker';
@@ -56,8 +57,8 @@ export const emptyDraft = (kind: ListingKind, source: InputSource): Draft => ({
   refreshIntervalDays: getProfile().defaultReminderDays,
 });
 
-export function autoTitle(d: Pick<Draft, 'propertyType' | 'status' | 'district' | 'kind'>): string {
-  const type = PROPERTY_TYPE_LABELS[d.propertyType].split(' ')[0];
+export function autoTitle(d: Pick<Draft, 'propertyType' | 'status' | 'district' | 'kind'>, typeOverride?: string): string {
+  const type = typeOverride?.trim() || PROPERTY_TYPE_LABELS[d.propertyType].split(' ')[0];
   const action =
     d.kind === 'offer'
       ? OFFER_STATUS_LABELS[d.status as keyof typeof OFFER_STATUS_LABELS] ?? 'للبيع'
@@ -131,12 +132,13 @@ function FieldInput({
         {def.label} {def.unit && <span className="text-[#c9972f]/80">({def.unit})</span>}
       </span>
       <input
-        type={def.input}
-        value={value === undefined || value === null ? '' : String(value)}
+        type={def.input === 'number' ? 'text' : def.input}
+        inputMode={def.input === 'number' ? 'decimal' : undefined}
+        value={def.input === 'number' ? formatInputNumber(typeof value === 'number' ? value : undefined) : value === undefined || value === null ? '' : String(value)}
         placeholder={def.placeholder}
         onChange={(e) => {
           const raw = e.target.value;
-          if (def.input === 'number') onChange(raw === '' ? undefined : Number(raw));
+          if (def.input === 'number') onChange(parseInputNumber(raw));
           else onChange(raw === '' ? undefined : raw);
         }}
         className={cn(
@@ -361,18 +363,20 @@ export function DraftEditor({ draft, onChange }: { draft: Draft; onChange: (d: D
             🏷️ {isRequest ? 'الميزانية القصوى' : 'سعر البيع / الحد'} {(draft.propertyType === 'land' || draft.propertyType === 'block') && !isRequest && <span className="text-[#c9972f]/80">(إجمالي الأرض)</span>}
           </span>
           <input
-            type="number"
-            value={draft.priceAsk ?? ''}
-            onChange={(e) => setPriceAsk(e.target.value === '' ? undefined : Number(e.target.value))}
+            type="text"
+            inputMode="numeric"
+            value={formatInputNumber(draft.priceAsk)}
+            onChange={(e) => setPriceAsk(parseInputNumber(e.target.value))}
             className="w-full bg-secondary/50 border border-border rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#c9972f]/60 nums-latin"
           />
         </label>
         {!isRequest && <label className="space-y-1.5 block">
           <span className="text-xs font-bold text-muted-foreground">💬 سعر السوم (قابل للتحديث)</span>
           <input
-            type="number"
-            value={draft.priceBid ?? ''}
-            onChange={(e) => set('priceBid', e.target.value === '' ? undefined : Number(e.target.value))}
+            type="text"
+            inputMode="numeric"
+            value={formatInputNumber(draft.priceBid)}
+            onChange={(e) => set('priceBid', parseInputNumber(e.target.value))}
             className="w-full bg-secondary/50 border border-border rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#c9972f]/60 nums-latin"
           />
         </label>}

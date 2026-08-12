@@ -18,6 +18,8 @@ export function MapPicker({ value, onChange, onDistrictFound, height = 260 }: { 
   const [gpsLoading, setGpsLoading] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [hint, setHint] = useState('انقر على الخريطة لتثبيت الدبوس');
+  const selectedLat = value?.lat;
+  const selectedLng = value?.lng;
 
   useEffect(() => { onChangeRef.current = onChange; onDistrictFoundRef.current = onDistrictFound; }, [onChange, onDistrictFound]);
 
@@ -47,7 +49,10 @@ export function MapPicker({ value, onChange, onDistrictFound, height = 260 }: { 
         void reverseGeocode(point);
       });
       mapRef.current = map;
-      setMapReady(true);
+      map.on('load', () => {
+        map.resize();
+        setMapReady(true);
+      });
     })();
     return () => { cancelled = true; markerRef.current?.remove(); markerRef.current = null; mapRef.current?.remove(); mapRef.current = null; };
     // Initialization must run only once; current callbacks are held in refs.
@@ -58,15 +63,17 @@ export function MapPicker({ value, onChange, onDistrictFound, height = 260 }: { 
     let cancelled = false;
     void (async () => {
       const map = mapRef.current;
-      if (!mapReady || !map || !value) { markerRef.current?.remove(); markerRef.current = null; return; }
+      if (!mapReady || !map || selectedLat === undefined || selectedLng === undefined) { markerRef.current?.remove(); markerRef.current = null; return; }
       if (!markerRef.current) {
         const maplibregl = await import('maplibre-gl');
         if (cancelled || !mapRef.current) return;
-        markerRef.current = new maplibregl.Marker({ color: '#c9972f' }).setLngLat([value.lng, value.lat]).addTo(mapRef.current);
-      } else markerRef.current.setLngLat([value.lng, value.lat]);
+        markerRef.current = new maplibregl.Marker({ color: '#c9972f' }).setLngLat([selectedLng, selectedLat]).addTo(mapRef.current);
+      } else markerRef.current.setLngLat([selectedLng, selectedLat]);
+      map.flyTo({ center: [selectedLng, selectedLat], zoom: 15, essential: true });
+      setHint('تم تحديد الموقع على الخريطة. يمكنك النقر للتعديل');
     })();
     return () => { cancelled = true; };
-  }, [mapReady, value]);
+  }, [mapReady, selectedLat, selectedLng]);
 
   const search = async () => {
     if (!query.trim()) return;

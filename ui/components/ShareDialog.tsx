@@ -50,7 +50,7 @@ export function ShareDialog({
 
   const message = useMemo(() => {
     const base = buildShareMessage(listing, { ...opts, includeQuickLink: false }, profile);
-    return (opts.includeQuickLink || opts.includeImage) && publicUrl ? `${base}\n🔗 التفاصيل${opts.includeImage ? ' والصورة' : ''}: ${publicUrl}` : base;
+    return (opts.includeQuickLink || opts.includeImage) && publicUrl ? `${base}\n🔗 التفاصيل${opts.includeImage ? ' والصورة' : ''}\n${publicUrl}` : base;
   }, [listing, opts, profile, publicUrl]);
 
   const ensurePublicUrl = async () => {
@@ -65,7 +65,7 @@ export function ShareDialog({
     let finalMessage = message;
     if ((opts.includeQuickLink || opts.includeImage) && !publicUrl) {
       const url = await ensurePublicUrl();
-      finalMessage = `${buildShareMessage(listing, { ...opts, includeQuickLink: false }, profile)}\n🔗 التفاصيل${opts.includeImage ? ' والصورة' : ''}: ${url}`;
+      finalMessage = `${buildShareMessage(listing, { ...opts, includeQuickLink: false }, profile)}\n🔗 التفاصيل${opts.includeImage ? ' والصورة' : ''}\n${url}`;
     }
     db.addShareLog({
       listingId: listing.id,

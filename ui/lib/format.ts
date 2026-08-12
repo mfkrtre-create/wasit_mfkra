@@ -3,6 +3,26 @@
 export const fmtMoney = (n?: number): string =>
   n === undefined || n === null ? '—' : `${n.toLocaleString('en-US')} ر.س`;
 
+export const formatInputNumber = (value?: number): string =>
+  value === undefined || value === null || !Number.isFinite(value)
+    ? ''
+    : new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value).replace(/,/g, '.');
+
+export const parseInputNumber = (value: string): number | undefined => {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const normalizedDigits = trimmed
+    .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+    .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
+    .replace(/[٬،\s]/g, '');
+  const separatorCount = (normalizedDigits.match(/[.,]/g) ?? []).length;
+  const decimalLike = separatorCount === 1 && !/[.,]\d{3}$/.test(normalizedDigits);
+  const numeric = decimalLike ? normalizedDigits.replace(',', '.') : normalizedDigits.replace(/[.,]/g, '');
+  if (!/^\d+(?:\.\d+)?$/.test(numeric)) return undefined;
+  const parsed = Number(numeric);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
 export const fmtCompact = (n?: number): string => {
   if (n === undefined || n === null) return '—';
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)} مليون`;

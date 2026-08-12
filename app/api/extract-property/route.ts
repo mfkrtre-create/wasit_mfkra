@@ -26,6 +26,7 @@ Saudi numeric language:
 
 Field placement:
 - Put every district mentioned in districts. Put exact area in area; requested ranges in minimumArea/maximumArea.
+- Preserve the visible property phrase for titles in customPropertyType when the text uses a compound, dual, or plural form. Examples: "مبنى مكتبي" stays customPropertyType "مبنى مكتبي" with propertyType office; "برجين" stays "برجين" with propertyType tower; "شقتين" stays "شقتين" with propertyType apartment; "فلتين" stays "فلتين" with propertyType villa; "عمارتين" stays "عمارتين" with propertyType building.
 - Put all directions in facades. Put exact age in propertyAge and request ceilings such as "لا يتجاوز عمره 10 سنوات" in maximumPropertyAge.
 - Distinguish FAL license from real-estate advertisement/advertiser number. Use falLicenseNumber only when FAL is explicit; use advertisementNumber for "رقم الإعلان", "رقم المعلن", or an explicitly identified ad license. If the text merely says "رقم الترخيص" and context is ambiguous, use licenseNumber and flag it in missingFields.
 - Preserve meaningful facts without dedicated fields, such as income, financing, occupancy, furnishing, contract duration, building details, and payment terms, in description or technicalRequirements.

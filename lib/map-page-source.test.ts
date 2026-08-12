@@ -86,7 +86,7 @@ describe('reference frontend integration', () => {
     expect(map).toContain('rasterMapStyle');
     expect(map).toContain('window.isSecureContext');
     expect(picker).toContain('rasterMapStyle');
-    expect(style).toContain('basemaps.cartocdn.com/dark_all');
+    expect(style).toContain('basemaps.cartocdn.com/light_all');
     expect(map).toContain('خريطة الإعلانات');
     expect(map).toContain('قائمة الإعلانات');
   });

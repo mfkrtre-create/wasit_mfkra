@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronUp, Layers } from 'lucide-react';
+import { AlertCircle, ChevronDown, ChevronUp, Layers } from 'lucide-react';
 import type { Listing } from '@/ui/types';
 import { PROPERTY_TYPE_LABELS, statusLabel } from '@/ui/types';
 import { useDB } from '@/ui/lib/db';
@@ -37,6 +37,7 @@ export function MapPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  const [mapError, setMapError] = useState('');
 
   const visible = useMemo(() => listings.filter((listing) => !listing.deletedAt && listing.lat !== undefined && listing.lng !== undefined && listing.status !== 'archived' && (filter === 'all' || listing.kind === filter)), [filter, listings]);
 
@@ -53,7 +54,11 @@ export function MapPage() {
         map.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true } }), 'bottom-left');
       }
       mapRef.current = map;
-      setMapReady(true);
+      map.on('load', () => {
+        map.resize();
+        setMapReady(true);
+      });
+      map.on('error', () => setMapError('تعذر تحميل الخريطة. تحقق من الاتصال أو مزود الخرائط.'));
     })();
     return () => { cancelled = true; markersRef.current.forEach((marker) => marker.remove()); markersRef.current = []; mapRef.current?.remove(); mapRef.current = null; };
   }, []);
@@ -94,7 +99,7 @@ export function MapPage() {
   return (
     <div className="h-screen flex flex-col md:flex-row">
       <div className="hidden md:flex flex-col w-1/2 border-l border-border bg-[#0c1a36]"><div className="p-4 border-b border-border space-y-3"><h1 className="text-xl font-extrabold text-white">خريطة الإعلانات</h1>{filterBar}{legend}</div><div className="flex-1 overflow-y-auto scrollbar-thin">{list}</div><div className="p-3 border-t border-border text-[11px] text-muted-foreground text-center">{visible.length} سجلاً على OpenFreeMap</div></div>
-      <div className="relative flex-1 h-full"><div ref={containerRef} className="absolute inset-0" /><div className="md:hidden absolute top-3 inset-x-3 z-10 rounded-2xl bg-[#0c1a36]/95 border border-border p-2.5 space-y-2">{filterBar}{legend}</div><div className={cn('md:hidden absolute inset-x-0 bottom-0 z-10 bg-[#0c1a36] border-t border-[#c9972f]/30 rounded-t-2xl flex flex-col transition-all', sheetOpen ? 'h-[62%]' : 'h-14')}><button onClick={() => setSheetOpen((value) => !value)} className="h-14 flex items-center justify-center gap-2 font-extrabold text-sm text-white">{sheetOpen ? <ChevronDown className="w-5 h-5 text-[#e5bc55]" /> : <ChevronUp className="w-5 h-5 text-[#e5bc55]" />}قائمة الإعلانات ({visible.length})</button>{sheetOpen && <div className="flex-1 overflow-y-auto">{list}</div>}</div></div>
+      <div className="relative flex-1 h-full"><div ref={containerRef} className="absolute inset-0" />{!mapReady && !mapError && <div className="absolute inset-0 grid place-items-center bg-[#0a1730]/85 text-sm font-extrabold text-slate-200">جاري تحميل الخريطة...</div>}{mapError && <div className="absolute inset-0 grid place-items-center bg-[#0a1730]/90 px-4 text-center text-sm font-bold text-red-200"><span className="inline-flex items-center gap-2"><AlertCircle className="w-5 h-5" />{mapError}</span></div>}<div className="md:hidden absolute top-3 inset-x-3 z-10 rounded-2xl bg-[#0c1a36]/95 border border-border p-2.5 space-y-2">{filterBar}{legend}</div><div className={cn('md:hidden absolute inset-x-0 bottom-0 z-10 bg-[#0c1a36] border-t border-[#c9972f]/30 rounded-t-2xl flex flex-col transition-all', sheetOpen ? 'h-[62%]' : 'h-14')}><button onClick={() => setSheetOpen((value) => !value)} className="h-14 flex items-center justify-center gap-2 font-extrabold text-sm text-white">{sheetOpen ? <ChevronDown className="w-5 h-5 text-[#e5bc55]" /> : <ChevronUp className="w-5 h-5 text-[#e5bc55]" />}قائمة الإعلانات ({visible.length})</button>{sheetOpen && <div className="flex-1 overflow-y-auto">{list}</div>}</div></div>
     </div>
   );
 }

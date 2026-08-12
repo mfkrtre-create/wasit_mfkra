@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { Keyboard, MessageSquareText, Mic, MicOff, ArrowRight, Save, Sparkles, CheckCircle2 } from 'lucide-react';
 import { useApp } from '@/ui/context/AppContext';
 import { db } from '@/ui/lib/db';
-import { parseListingText, type ParsedListing } from '@/ui/lib/parser';
+import { normalizeArabic, parseListingText, type ParsedListing } from '@/ui/lib/parser';
 import { extractPropertyWithServerAI, parsedListingFromServerAI, transcribeWithServerAI } from '@/ui/lib/server-ai';
 import { PROPERTY_TYPE_LABELS, type Listing } from '@/ui/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/ui/components/ui/dialog';
 import { cn } from '@/ui/lib/utils';
 import { autoTitle, emptyDraft, DraftEditor, type Draft } from './DraftEditor';
 import { toast } from 'sonner';
+import { extractGoogleMapsUrl, parseCoordinatesFromGoogleMapsUrl } from '@/lib/google-maps';
 
 type Tab = 'manual' | 'paste' | 'voice';
 type Step = 'input' | 'review';
@@ -18,6 +19,45 @@ const TABS: Array<{ key: Tab; label: string; icon: typeof Keyboard; hint: string
   { key: 'paste', label: 'لصق واتساب', icon: MessageSquareText, hint: 'حلّل نص إعلان جاهز' },
   { key: 'voice', label: 'إدخال صوتي', icon: Mic, hint: 'تحدث وسنستخرج البيانات' },
 ];
+
+function inferTitleTypeLabel(rawText: string, draft: Draft): string | undefined {
+  const custom = typeof draft.fields.customPropertyType === 'string' ? draft.fields.customPropertyType.trim() : '';
+  if (custom) return custom.split(/\s+/).slice(0, 3).join(' ');
+
+  const text = normalizeArabic(rawText).replace(/\s+/g, ' ');
+  const matches: Array<[RegExp, string]> = [
+    [/مبن[ىي]\s+مكتبي/, 'مبنى مكتبي'],
+    [/برجين/, 'برجين'],
+    [/ابراج/, 'أبراج'],
+    [/شقتين/, 'شقتين'],
+    [/شقق/, 'شقق'],
+    [/فلتين|فيلتين|فيلاين/, 'فلتين'],
+    [/فلل/, 'فلل'],
+    [/عمارتين/, 'عمارتين'],
+    [/عمائر/, 'عمائر'],
+    [/مزرعتين/, 'مزرعتين'],
+    [/مزارع/, 'مزارع'],
+  ];
+  return matches.find(([pattern]) => pattern.test(text))?.[1];
+}
+
+async function draftWithGoogleMapsPin(draft: Draft, rawText: string): Promise<Draft> {
+  if (draft.lat && draft.lng) return draft;
+  const mapUrl = extractGoogleMapsUrl(rawText);
+  if (!mapUrl) return draft;
+
+  const direct = parseCoordinatesFromGoogleMapsUrl(mapUrl);
+  if (direct) return { ...draft, lat: direct.lat, lng: direct.lng, fields: { ...draft.fields, googleMapsUrl: mapUrl } };
+
+  const response = await fetch('/api/resolve-map-url', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: mapUrl }),
+  });
+  const body = (await response.json().catch(() => null)) as { lat?: number; lng?: number; resolvedUrl?: string } | null;
+  if (!response.ok || typeof body?.lat !== 'number' || typeof body.lng !== 'number') return { ...draft, fields: { ...draft.fields, googleMapsUrl: mapUrl } };
+  return { ...draft, lat: body.lat, lng: body.lng, fields: { ...draft.fields, googleMapsUrl: body.resolvedUrl ?? mapUrl } };
+}
 
 function draftFromParsed(parsed: ParsedListing, source: 'whatsapp' | 'voice', rawText: string, fallbackKind: 'offer' | 'request'): Draft {
   const base = emptyDraft(parsed.kind ?? fallbackKind, source);
@@ -48,7 +88,7 @@ function draftFromParsed(parsed: ParsedListing, source: 'whatsapp' | 'voice', ra
   }
   if (parsed.priceBid !== undefined) draft.priceBid = parsed.priceBid;
   if (parsed.priceAsk !== undefined) draft.priceAsk = parsed.priceAsk;
-  draft.title = autoTitle(draft);
+  draft.title = autoTitle(draft, inferTitleTypeLabel(rawText, draft));
   return draft;
 }
 
@@ -131,14 +171,16 @@ export function QuickAddModal() {
     try {
       const serverData = await extractPropertyWithServerAI(text);
       const p = parsedListingFromServerAI(serverData, quickAddDefaultKind);
+      const nextDraft = await draftWithGoogleMapsPin(draftFromParsed(p, source, text, quickAddDefaultKind), text);
       setParsed(p);
-      setDraft(draftFromParsed(p, source, text, quickAddDefaultKind));
+      setDraft(nextDraft);
       setStep('review');
       toast.success('تم تحليل الإعلان عبر AI');
     } catch (error) {
       const p = parseListingText(text);
+      const nextDraft = await draftWithGoogleMapsPin(draftFromParsed(p, source, text, quickAddDefaultKind), text);
       setParsed(p);
-      setDraft(draftFromParsed(p, source, text, quickAddDefaultKind));
+      setDraft(nextDraft);
       setStep('review');
       toast.warning(error instanceof Error ? `${error.message} — تم استخدام المحلل المحلي للمراجعة.` : 'تم استخدام المحلل المحلي للمراجعة.');
     } finally {

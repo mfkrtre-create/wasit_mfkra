@@ -39,16 +39,16 @@ function toAmount(token: string, mult?: string): number | undefined {
 
 /** word-exact matching (normalized) — avoids «العارض» matching «أرض» */
 const TYPE_KEYWORDS: Array<{ type: PropertyType; words: string[] }> = [
-  { type: 'villa', words: ['فيلا', 'الفيلا', 'فله', 'الفله', 'دبلكس'] },
-  { type: 'apartment', words: ['شقه', 'الشقه', 'شقق'] },
-  { type: 'building', words: ['عماره', 'العماره', 'عمائر'] },
+  { type: 'villa', words: ['فيلا', 'الفيلا', 'فله', 'الفله', 'فلتين', 'فيلتين', 'فيلاين', 'فلل', 'دبلكس'] },
+  { type: 'apartment', words: ['شقه', 'الشقه', 'شقتين', 'شقق'] },
+  { type: 'building', words: ['عماره', 'العماره', 'عمارتين', 'عمائر'] },
   { type: 'block', words: ['بلك', 'البلك'] },
   { type: 'warehouse', words: ['مستودع', 'المستودع', 'مستودعات'] },
   { type: 'rest_house', words: ['استراحه', 'الاستراحه', 'شاليه'] },
-  { type: 'office', words: ['مكتب', 'المكتب'] },
+  { type: 'office', words: ['مكتب', 'المكتب', 'مكتبي'] },
   { type: 'shop', words: ['محل', 'المحل', 'محلات'] },
-  { type: 'farm', words: ['مزرعه', 'المزرعه', 'حقل'] },
-  { type: 'tower', words: ['برج', 'البرج', 'ابراج'] },
+  { type: 'farm', words: ['مزرعه', 'المزرعه', 'مزرعتين', 'مزارع', 'حقل'] },
+  { type: 'tower', words: ['برج', 'البرج', 'برجين', 'ابراج'] },
   { type: 'land', words: ['ارض', 'الارض', 'قطعه', 'القطعه'] },
 ];
 
@@ -73,10 +73,15 @@ export function parseListingText(raw: string): ParsedListing {
   // ---- property type (word-exact, priority order) ----
   const wordSet = new Set(flat.split(/\s+/));
   let propertyType: PropertyType = 'land';
-  for (const { type, words } of TYPE_KEYWORDS) {
-    if (words.some((w) => wordSet.has(w))) {
-      propertyType = type;
-      break;
+  if (/مبن[ىي]\s+مكتبي/.test(flat)) {
+    propertyType = 'office';
+    fields.customPropertyType = 'مبنى مكتبي';
+  } else {
+    for (const { type, words } of TYPE_KEYWORDS) {
+      if (words.some((w) => wordSet.has(w))) {
+        propertyType = type;
+        break;
+      }
     }
   }
   confidence.push('تم التعرف على نوع العقار');

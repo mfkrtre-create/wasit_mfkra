@@ -48,7 +48,7 @@ export const propertyJsonSchema = {
     recordType: { type: 'string', enum: recordTypes, description: 'offer for property being offered; request for a client need.' },
     transactionType: { type: ['string', 'null'], enum: [...transactionTypes, null], description: 'sale, rent, buy, or rent_request only from explicit intent.' },
     propertyType: { type: ['string', 'null'], enum: [...propertyTypes, null] },
-    customPropertyType: { ...nullableString, description: 'Free text type only when propertyType is other.' },
+    customPropertyType: { ...nullableString, description: 'Original visible property phrase for compound, dual, plural, or other types, such as مبنى مكتبي, برجين, شقتين, فلتين, عمارتين.' },
     category: { type: ['string', 'null'], enum: [...propertyCategories, null] },
     city: { ...nullableString }, districts: { type: 'array', items: { type: 'string' }, description: 'All explicitly mentioned districts.' },
     area: { ...nullableNumber, description: 'Exact area only.' }, minimumArea: { ...nullableNumber }, maximumArea: { ...nullableNumber },

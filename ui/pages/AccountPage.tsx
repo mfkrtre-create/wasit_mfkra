@@ -92,7 +92,7 @@ export function AccountPage() {
         profile,
       )
     : '';
-  const textWithLink = publicUrl ? `${currentShareText}\n\nرابط التفاصيل: ${publicUrl}` : currentShareText;
+  const textWithLink = publicUrl ? `${currentShareText}\n\nرابط التفاصيل\n${publicUrl}` : currentShareText;
 
   const loadLinks = () => {
     setLinksBusy(true);
